@@ -71,10 +71,10 @@ export async function initializeGoogleDrive(): Promise<CloudCredentials | null> 
 
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
       
-      // Open popup window
+      // Open popup window with underscores instead of spaces in name
       const popup = window.open(
         authUrl,
-        'Google OAuth',
+        'Google_OAuth',
         `width=${width},height=${height},left=${left},top=${top},popup=1`
       );
 

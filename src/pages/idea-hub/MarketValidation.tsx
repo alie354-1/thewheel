@@ -243,40 +243,71 @@ export default function MarketValidation() {
             {
               role: "system",
               content: `You are an experienced market research analyst helping founders validate their startup ideas. 
-              Analyze the provided information and generate detailed market insights in the following categories:
-              1. Customer Profiles (3-5 detailed personas)
-              2. Early Adopters (specific groups most likely to try first)
-              3. Sales Channels (best ways to reach customers)
-              4. Pricing Insights (pricing strategy recommendations)
-              5. Integration Recommendations (if applicable)
-              6. Market Size Estimates (TAM/SAM/SOM estimates)
-              7. Competition Analysis (direct and indirect competitors)
-              
-              Format your response as a JSON object with these categories as arrays of strings.`
+            Analyze the provided information and generate detailed market insights.
+            
+            Format your response as a JSON object with these exact keys:
+            {
+              "customer_profiles": string[],
+              "early_adopters": string[],
+              "sales_channels": string[],
+              "pricing_insights": string[],
+              "integration_recommendations": string[],
+              "market_size_estimates": string[],
+              "competition_analysis": string[]
+            }
+            
+            Each array should contain 3-5 detailed insights.
+            Ensure all text is properly escaped for JSON.`
             },
             {
               role: "user", 
               content: `Please analyze this startup idea:
-                Title: ${idea.title}
-                Description: ${idea.description}
-                Solution Type: ${idea.solution_concept}
-                Target Audience: ${marketData.target_audience}
-                Sales Channels: ${marketData.sales_channels}
-                Pricing Model: ${marketData.pricing_model}
-                Customer Type: ${marketData.customer_type}
-                Integration Needs: ${marketData.integration_needs}`
+              Title: ${idea.title}
+              Description: ${idea.description}
+              Solution Type: ${idea.solution_concept}
+              Target Audience: ${marketData.target_audience}
+              Sales Channels: ${marketData.sales_channels}
+              Pricing Model: ${marketData.pricing_model}
+              Customer Type: ${marketData.customer_type}
+              Integration Needs: ${marketData.integration_needs}`
             }
           ],
-          temperature: 0.7
+          temperature: 0.7,
+          max_tokens: 2000
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate market insights');
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to generate market insights');
       }
 
       const result = await response.json();
-      const insights = JSON.parse(result.choices[0].message.content);
+      const content = result.choices[0].message.content;
+
+      // Safely parse the JSON response
+      let insights;
+      try {
+        insights = JSON.parse(content.trim());
+      } catch (parseError) {
+        console.error('Error parsing OpenAI response:', parseError);
+        throw new Error('Failed to parse market insights. Please try again.');
+      }
+
+      // Validate the response structure
+      const requiredKeys = [
+        'customer_profiles',
+        'early_adopters',
+        'sales_channels',
+        'pricing_insights',
+        'market_size_estimates',
+        'competition_analysis'
+      ];
+
+      const missingKeys = requiredKeys.filter(key => !insights[key]);
+      if (missingKeys.length > 0) {
+        throw new Error(`Invalid response format. Missing: ${missingKeys.join(', ')}`);
+      }
 
       setMarketData(prev => ({
         ...prev,

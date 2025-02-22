@@ -68,9 +68,10 @@ export default function IdeaRefinement() {
   const handleSave = async (continueToNext: boolean = false) => {
     if (!user) return;
 
-    const selectedIdea = refinedIdeas.find(idea => idea.isSelected);
-    if (!selectedIdea) {
-      setError('Please select one of the combined ideas to continue');
+    // For single selected variation
+    const selectedVariations = variations.filter(v => v.isSelected);
+    if (selectedVariations.length === 0) {
+      setError('Please select at least one variation to continue');
       return;
     }
 
@@ -79,31 +80,50 @@ export default function IdeaRefinement() {
     setSuccess('');
 
     try {
-      // Save the refined idea
+      // Save the selected variation directly if only one is chosen
+      const selectedIdea = selectedVariations.length === 1 ? {
+        title: selectedVariations[0].title,
+        description: selectedVariations[0].description,
+        target_audience: selectedVariations[0].targetMarket,
+        solution_concept: selectedVariations[0].differentiator,
+        status: 'draft',
+        ai_feedback: {
+          source_elements: [selectedVariations[0].differentiator],
+          revenue_model: selectedVariations[0].revenueModel,
+          original_variations: selectedVariations.map(v => ({
+            title: v.title,
+            description: v.description,
+            differentiator: v.differentiator,
+            target_market: v.targetMarket,
+            revenue_model: v.revenueModel,
+            liked_aspects: v.likedAspects
+          }))
+        }
+      } : {
+        title: refinedIdeas.find(idea => idea.isSelected)?.title || '',
+        description: refinedIdeas.find(idea => idea.isSelected)?.description || '',
+        target_audience: refinedIdeas.find(idea => idea.isSelected)?.targetMarket || '',
+        solution_concept: refinedIdeas.find(idea => idea.isSelected)?.valueProposition || '',
+        status: 'draft',
+        ai_feedback: {
+          source_elements: refinedIdeas.find(idea => idea.isSelected)?.sourceElements || [],
+          revenue_model: refinedIdeas.find(idea => idea.isSelected)?.revenueModel || '',
+          original_variations: variations
+            .filter(v => v.isSelected)
+            .map(v => ({
+              title: v.title,
+              description: v.description,
+              differentiator: v.differentiator,
+              target_market: v.targetMarket,
+              revenue_model: v.revenueModel,
+              liked_aspects: v.likedAspects
+            }))
+        }
+      };
+
       const { data: idea, error: saveError } = await supabase
         .from('ideas')
-        .insert({
-          user_id: user.id,
-          title: selectedIdea.title,
-          description: selectedIdea.description,
-          target_audience: selectedIdea.targetMarket,
-          solution_concept: selectedIdea.valueProposition,
-          status: 'draft',
-          ai_feedback: {
-            source_elements: selectedIdea.sourceElements,
-            revenue_model: selectedIdea.revenueModel,
-            original_variations: variations
-              .filter(v => v.isSelected)
-              .map(v => ({
-                title: v.title,
-                description: v.description,
-                differentiator: v.differentiator,
-                target_market: v.targetMarket,
-                revenue_model: v.revenueModel,
-                liked_aspects: v.likedAspects
-              }))
-          }
-        })
+        .insert(selectedIdea)
         .select()
         .single();
 
@@ -410,7 +430,7 @@ export default function IdeaRefinement() {
             {/* AI Variations */}
             {variations.length > 0 && (
               <div className="mt-8 pt-6 border-t border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Select Variations to Combine</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Select Variations to Explore</h3>
                 <div className="space-y-4">
                   {variations.map((variation) => (
                     <div 
@@ -508,16 +528,29 @@ export default function IdeaRefinement() {
                   ))}
                 </div>
 
-                {/* Combine Ideas Button */}
+                {/* Updated Combine/Continue Button */}
                 <div className="mt-6 flex justify-end">
-                  <button
-                    onClick={generateCombined}
-                    disabled={isGenerating || variations.filter(v => v.isSelected).length < 2}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    {isGenerating ? 'Generating Options...' : 'Generate Combined Options'}
-                  </button>
+                  {variations.filter(v => v.isSelected).length > 0 && (
+                    <button
+                      onClick={variations.filter(v => v.isSelected).length === 1 
+                        ? () => handleSave(true)  // Go straight to market validation
+                        : generateCombined}       // Generate combined options
+                      disabled={isGenerating}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {variations.filter(v => v.isSelected).length === 1 ? (
+                        <>
+                          Continue to Market Validation
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          {isGenerating ? 'Generating Options...' : 'Generate Combined Options'}
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
