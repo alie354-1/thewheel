@@ -4,6 +4,7 @@ import { useAuthStore } from '../lib/store';
 import { Settings, Users, MessageSquare, Slack, Plus, Mail, Key, AlertCircle, Bot, CloudCog } from 'lucide-react';
 import OpenAI from 'openai';
 import AppCredentialsSettings from '../components/admin/AppCredentialsSettings';
+import FeatureFlagsSettings from '../components/admin/FeatureFlagsSettings';
 
 export default function AdminPanel() {
   const { profile } = useAuthStore();
@@ -251,6 +252,17 @@ export default function AdminPanel() {
             >
               <MessageSquare className="h-5 w-5 mr-2" />
               Communities
+            </button>
+            <button
+              onClick={() => setActiveTab('feature-flags')}
+              className={`${
+                activeTab === 'feature-flags'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            >
+              <Settings className="h-5 w-5 mr-2" />
+              Feature Flags
             </button>
           </nav>
         </div>
@@ -582,6 +594,10 @@ export default function AdminPanel() {
                 ))}
               </div>
             </div>
+          )}
+
+          {activeTab === 'feature-flags' && (
+            <FeatureFlagsSettings />
           )}
         </div>
       </div>
