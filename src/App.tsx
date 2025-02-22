@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { useAuthStore } from './lib/store';
@@ -11,6 +11,8 @@ import CompanySetup from './pages/company/CompanySetup';
 import CompanyDashboard from './pages/company/CompanyDashboard';
 import CompanySettings from './pages/company/CompanySettings';
 import IdeaHub from './pages/IdeaHub';
+import IdeaRefinement from './pages/idea-hub/IdeaRefinement';
+import MarketValidation from './pages/idea-hub/MarketValidation';
 import AIDiscussion from './pages/idea-hub/AIDiscussion';
 import IdeaCanvas from './pages/idea-hub/IdeaCanvas';
 import MarketResearch from './pages/idea-hub/MarketResearch';
@@ -40,8 +42,9 @@ function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
 
 function App() {
   const { setUser, fetchProfile } = useAuthStore();
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     // Initial auth state
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -65,6 +68,12 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const handleConnect = () => {
+    setIsConnecting(true);
+    // The actual connection will be handled by Supabase's UI
+    // This state is just for showing loading state
+  };
+
   return (
     <Router>
       <Routes>
@@ -85,6 +94,8 @@ function App() {
           <Route path="community/post/:id" element={<Post />} />
           <Route path="community/new-post" element={<NewPost />} />
           <Route path="idea-hub" element={<IdeaHub />} />
+          <Route path="idea-hub/refinement" element={<IdeaRefinement />} />
+          <Route path="idea-hub/market-validation" element={<MarketValidation />} />
           <Route path="idea-hub/ai-discussion" element={<AIDiscussion />} />
           <Route path="idea-hub/canvas" element={<IdeaCanvas />} />
           <Route path="idea-hub/market-research" element={<MarketResearch />} />

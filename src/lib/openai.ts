@@ -50,19 +50,16 @@ export const generateTasks = async (entry: {
 
 Your response should follow this format:
 
-FEEDBACK
-[Provide thoughtful analysis that:
-- Acknowledges specific achievements
-- Identifies patterns and insights
-- Highlights potential risks or missed opportunities 
-- Suggests strategic improvements
-- Connects current work to bigger picture goals
-- Offers specific actionable advice]
-
-TASKS
-[Generate 3-5 high-impact tasks in this exact format:]
-
 {
+  "feedback": {
+    "insights": {
+      "strengths": [],
+      "areas_for_improvement": [],
+      "opportunities": [],
+      "risks": [],
+      "strategic_recommendations": []
+    }
+  },
   "tasks": [
     {
       "title": "Clear task title",
@@ -116,7 +113,7 @@ TASKS
         },
         {
           role: "user",
-          content: `Please analyze this standup update and provide strategic feedback and tasks:
+          content: `Please analyze this update and provide strategic feedback and tasks:
 
 ${entry.accomplished ? 'Accomplished: ' + entry.accomplished + '\n' : ''}${entry.working_on ? 'Working On: ' + entry.working_on + '\n' : ''}${entry.blockers ? 'Blockers: ' + entry.blockers + '\n' : ''}${entry.goals ? 'Goals: ' + entry.goals : ''}`
         }
@@ -130,17 +127,12 @@ ${entry.accomplished ? 'Accomplished: ' + entry.accomplished + '\n' : ''}${entry
       throw new Error('No response generated');
     }
 
-    // Split into feedback and tasks sections
-    const [feedbackSection, tasksSection] = content.split('\n\nTASKS\n');
-    const feedback = feedbackSection.replace('FEEDBACK\n', '').trim();
+    // Parse response
+    const result = JSON.parse(content);
     
-    // Parse tasks JSON
-    try {
-      const tasksJson = tasksSection.trim();
-      const { tasks } = JSON.parse(tasksJson);
-
-      // Validate and transform tasks
-      const validatedTasks = tasks.map((task: any) => ({
+    return {
+      feedback: JSON.stringify(result.feedback),
+      tasks: result.tasks.map((task: any) => ({
         ...task,
         status: 'pending',
         implementation_tips: task.implementation_tips || [],
@@ -149,21 +141,174 @@ ${entry.accomplished ? 'Accomplished: ' + entry.accomplished + '\n' : ''}${entry
         resources: task.resources || [],
         learning_resources: task.learning_resources || [],
         tools: task.tools || []
-      }));
-
-      return {
-        feedback,
-        tasks: validatedTasks
-      };
-    } catch (e) {
-      console.error('Error parsing tasks JSON:', e);
-      return {
-        feedback,
-        tasks: []
-      };
-    }
+      }))
+    };
   } catch (error: any) {
     console.error('Error generating tasks:', error);
     throw new Error(error.message || 'Failed to generate tasks');
+  }
+};
+
+// Generate idea variations
+export const generateIdeaVariations = async (idea: {
+  title: string;
+  inspiration: string;
+  type: string;
+}) => {
+  try {
+    const { client, model } = await getOpenAIClient();
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: `You are an experienced startup advisor helping founders explore variations of their ideas.
+          Based on the core idea, generate 3-4 unique variations that explore different angles or approaches.
+          Each variation should have a unique value proposition and target market.
+          Format your response as a JSON array of objects with these exact keys:
+          {
+            "id": "uuid string",
+            "title": "string",
+            "description": "string",
+            "differentiator": "string",
+            "targetMarket": "string",
+            "revenueModel": "string",
+            "isSelected": false,
+            "isEditing": false
+          }`
+        },
+        {
+          role: "user",
+          content: `Please generate variations for this idea:
+            Core Idea: ${idea.title}
+            Inspiration: ${idea.inspiration}
+            Type: ${idea.type}`
+        }
+      ],
+      temperature: 0.8,
+      max_tokens: 2000
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error('No response generated');
+    }
+
+    return JSON.parse(content);
+  } catch (error: any) {
+    console.error('Error generating variations:', error);
+    throw new Error(error.message || 'Failed to generate variations');
+  }
+};
+
+// Generate combined ideas
+export const generateCombinedIdeas = async (
+  originalIdea: string,
+  selectedVariations: any[]
+) => {
+  try {
+    const { client, model } = await getOpenAIClient();
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: `You are an experienced startup advisor helping founders combine different aspects of their idea variations.
+          Create 2-3 unique combinations that merge the best elements from the selected variations.
+          Format your response as a JSON array of objects with these exact keys:
+          {
+            "id": "uuid string",
+            "title": "string",
+            "description": "string",
+            "sourceElements": ["string array of elements used from original variations"],
+            "targetMarket": "string",
+            "revenueModel": "string",
+            "valueProposition": "string",
+            "isSelected": false,
+            "isEditing": false
+          }`
+        },
+        {
+          role: "user",
+          content: `Please combine elements from these variations:
+            Original Idea: ${originalIdea}
+            Selected Variations: ${JSON.stringify(selectedVariations, null, 2)}`
+        }
+      ],
+      temperature: 0.8,
+      max_tokens: 2000
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error('No response generated');
+    }
+
+    return JSON.parse(content);
+  } catch (error: any) {
+    console.error('Error generating combined ideas:', error);
+    throw new Error(error.message || 'Failed to generate combined ideas');
+  }
+};
+
+// Generate market suggestions
+export const generateMarketSuggestions = async (idea: {
+  title: string;
+  description: string;
+  solution_concept: string;
+  target_audience?: string;
+  sales_channels?: string;
+  pricing_model?: string;
+  customer_type?: string;
+  integration_needs?: string;
+}) => {
+  try {
+    const { client, model } = await getOpenAIClient();
+
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content: `You are an experienced market research analyst helping founders validate their startup ideas.
+          Based on the provided idea details, generate 5 highly relevant suggestions for each market aspect.
+          Format your response as a JSON object with these exact keys:
+          {
+            "target_audience": string[],
+            "sales_channels": string[],
+            "pricing_model": string[],
+            "customer_type": string[],
+            "integration_needs": string[]
+          }
+          Each array should contain EXACTLY 5 suggestions that are specific and relevant to this particular idea.`
+        },
+        {
+          role: "user",
+          content: `Please generate market suggestions for this startup idea:
+            Title: ${idea.title}
+            Description: ${idea.description}
+            Solution Type: ${idea.solution_concept}
+            Current Target Audience: ${idea.target_audience || 'Not specified'}
+            Current Sales Channels: ${idea.sales_channels || 'Not specified'}
+            Current Pricing Model: ${idea.pricing_model || 'Not specified'}
+            Current Customer Type: ${idea.customer_type || 'Not specified'}
+            Current Integration Needs: ${idea.integration_needs || 'Not specified'}`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error('No response generated');
+    }
+
+    return JSON.parse(content);
+  } catch (error: any) {
+    console.error('Error generating market suggestions:', error);
+    throw new Error(error.message || 'Failed to generate market suggestions');
   }
 };

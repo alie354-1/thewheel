@@ -25,27 +25,6 @@ import TaskManager from '../components/tasks/TaskManager';
 import StandupHistory from '../components/StandupHistory';
 import JoinCompanyDialog from '../components/JoinCompanyDialog';
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high';
-  status: 'pending' | 'in_progress' | 'completed';
-  category: string;
-  task_type: string;
-  estimated_hours: number;
-  due_date: string;
-}
-
-interface CompanyMember {
-  id: string;
-  role: string;
-  title: string;
-  department: string;
-  user_id: string;
-  user_email?: string;
-}
-
 export default function Dashboard() {
   const { profile } = useAuthStore();
   const [hasCompany, setHasCompany] = useState(false);

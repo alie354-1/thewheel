@@ -8,16 +8,12 @@ import {
   Presentation, 
   ChevronLeft, 
   ChevronRight, 
-  MinusCircle,
   Share2,
-  MessageSquare,
   Download,
   Copy,
   Check,
-  Users,
-  Lock,
   Globe,
-  ExternalLink
+  Lock
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
@@ -34,30 +30,8 @@ interface Slide {
   };
 }
 
-interface Comment {
-  id: string;
-  user_id: string;
-  slide_id: string;
-  content: string;
-  created_at: string;
-  user?: {
-    full_name: string;
-    avatar_url: string;
-  };
-}
-
-interface Collaborator {
-  id: string;
-  user_id: string;
-  role: 'viewer' | 'editor';
-  user: {
-    full_name: string;
-    email: string;
-    avatar_url: string;
-  };
-}
-
 export default function PitchDeck() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [title, setTitle] = useState('Pitch Deck');
   const [deckId, setDeckId] = useState<string | null>(null);
@@ -66,11 +40,6 @@ export default function PitchDeck() {
   const [isPublic, setIsPublic] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  const [newCollaboratorEmail, setNewCollaboratorEmail] = useState('');
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState('');
-  const [showComments, setShowComments] = useState(false);
   const [slides, setSlides] = useState<Slide[]>([
     {
       id: '1',
@@ -114,19 +83,7 @@ export default function PitchDeck() {
     try {
       const { data: deck, error } = await supabase
         .from('pitch_decks')
-        .select(`
-          *,
-          collaborators:pitch_deck_collaborators(
-            id,
-            user_id,
-            role,
-            user:user_id(
-              full_name,
-              email,
-              avatar_url
-            )
-          )
-        `)
+        .select('*')
         .eq('user_id', user?.id)
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -139,35 +96,10 @@ export default function PitchDeck() {
         setTitle(deck.title);
         setSlides(deck.slides);
         setIsPublic(deck.is_public);
-        setCollaborators(deck.collaborators || []);
         setShareUrl(`${window.location.origin}/pitch-deck/${deck.id}`);
-        await loadComments(deck.id);
       }
     } catch (error) {
       console.error('Error loading deck:', error);
-    }
-  };
-
-  const loadComments = async (deckId: string) => {
-    try {
-      const { data: comments, error } = await supabase
-        .from('pitch_deck_comments')
-        .select(`
-          *,
-          user:user_id(
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('deck_id', deckId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (comments) {
-        setComments(comments);
-      }
-    } catch (error) {
-      console.error('Error loading comments:', error);
     }
   };
 
@@ -226,8 +158,6 @@ export default function PitchDeck() {
     setCurrentSlide(0);
     setIsPublic(false);
     setShareUrl('');
-    setCollaborators([]);
-    setComments([]);
   };
 
   const addSlide = (type: Slide['type']) => {
@@ -250,116 +180,6 @@ export default function PitchDeck() {
     setSlides(newSlides);
   };
 
-  const handleAddCollaborator = async () => {
-    if (!deckId || !newCollaboratorEmail) return;
-
-    try {
-      const { data: userData, error: userError } = await supabase
-        .rpc('get_user_by_email', {
-          email: newCollaboratorEmail
-        });
-
-      if (userError || !userData) {
-        console.error('User not found');
-        return;
-      }
-
-      const { error: collabError } = await supabase
-        .from('pitch_deck_collaborators')
-        .insert({
-          deck_id: deckId,
-          user_id: userData.id,
-          role: 'viewer'
-        });
-
-      if (collabError) throw collabError;
-
-      // Reload collaborators
-      const { data: updatedCollaborators } = await supabase
-        .from('pitch_deck_collaborators')
-        .select(`
-          id,
-          user_id,
-          role,
-          user:profiles(full_name, email, avatar_url)
-        `)
-        .eq('deck_id', deckId);
-
-      if (updatedCollaborators) {
-        setCollaborators(updatedCollaborators);
-      }
-
-      setNewCollaboratorEmail('');
-    } catch (error) {
-      console.error('Error adding collaborator:', error);
-    }
-  };
-
-  const handleUpdateCollaborator = async (collaboratorId: string, role: 'viewer' | 'editor') => {
-    if (!deckId) return;
-
-    try {
-      await supabase
-        .from('pitch_deck_collaborators')
-        .update({ role })
-        .eq('id', collaboratorId);
-
-      setCollaborators(prev =>
-        prev.map(c =>
-          c.id === collaboratorId ? { ...c, role } : c
-        )
-      );
-    } catch (error) {
-      console.error('Error updating collaborator:', error);
-    }
-  };
-
-  const handleRemoveCollaborator = async (collaboratorId: string) => {
-    if (!deckId) return;
-
-    try {
-      await supabase
-        .from('pitch_deck_collaborators')
-        .delete()
-        .eq('id', collaboratorId);
-
-      setCollaborators(prev =>
-        prev.filter(c => c.id !== collaboratorId)
-      );
-    } catch (error) {
-      console.error('Error removing collaborator:', error);
-    }
-  };
-
-  const handleAddComment = async () => {
-    if (!deckId || !newComment.trim()) return;
-
-    try {
-      const { data: comment, error } = await supabase
-        .from('pitch_deck_comments')
-        .insert({
-          deck_id: deckId,
-          slide_id: slides[currentSlide].id,
-          content: newComment,
-          user_id: user?.id
-        })
-        .select(`
-          *,
-          user:profiles(full_name, avatar_url)
-        `)
-        .single();
-
-      if (error) throw error;
-
-      if (comment) {
-        setComments(prev => [...prev, comment]);
-        setNewComment('');
-      }
-    } catch (error) {
-      console.error('Error adding comment:', error);
-    }
-  };
-
   const handleExport = async () => {
     try {
       const presentationId = await createGoogleSlides(title, slides);
@@ -378,17 +198,11 @@ export default function PitchDeck() {
             <Link to="/idea-hub" className="mr-4 text-gray-400 hover:text-gray-500">
               <ArrowLeft className="h-6 w-6" />
             </Link>
-            <div className="flex-1">
-              <div className="flex items-center">
-                <Rocket className="h-6 w-6 mr-2 text-gray-400" />
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="text-2xl font-semibold text-gray-900 bg-transparent border-none focus:ring-0 focus:outline-none"
-                  placeholder="Enter deck title..."
-                />
-              </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
+                <Rocket className="h-6 w-6 mr-2" />
+                {title}
+              </h1>
               <p className="mt-1 text-sm text-gray-500">
                 Create compelling investor presentations
               </p>
@@ -444,7 +258,7 @@ export default function PitchDeck() {
                   }`}
                 >
                   <div className="flex items-center">
-                    <Presentation className="h-4 w-4 mr-2 text-gray-400" />
+                    <Presentation className="h-4 w-4 text-gray-400 mr-2" />
                     <span className="text-sm font-medium text-gray-900">
                       {index + 1}. {slide.title}
                     </span>
@@ -464,7 +278,7 @@ export default function PitchDeck() {
           </div>
 
           {/* Slide Editor */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <div className="bg-white shadow rounded-lg">
               {/* Slide Navigation */}
               <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -556,7 +370,7 @@ export default function PitchDeck() {
                               content: { ...slides[currentSlide].content, bullets: newBullets }
                             });
                           }}
-                          className="ml-2 p-2 text-gray-400 hover:text-gray-500"
+                          className="ml-2 p-1 text-gray-400 hover:text-gray-500"
                         >
                           <MinusCircle className="h-4 w-4" />
                         </button>
@@ -601,72 +415,6 @@ export default function PitchDeck() {
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Comments Panel */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Comments</h3>
-              <button
-                onClick={() => setShowComments(!showComments)}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                {showComments ? 'Hide' : 'Show'} Comments
-              </button>
-            </div>
-
-            {showComments && (
-              <div className="space-y-4">
-                {comments.filter(c => c.slide_id === slides[currentSlide]?.id).map((comment) => (
-                  <div key={comment.id} className="flex space-x-3">
-                    <img
-                      className="h-8 w-8 rounded-full"
-                      src={
-                        comment.user?.avatar_url || 
-                        "https://ui-avatars.com/api/?name=" + encodeURIComponent(comment.user?.full_name || 'User')
-                      }
-                      alt=""
-                    />
-                    <div className="flex-1 bg-gray-50 rounded-lg p-3">
-                      <div className="text-sm">
-                        <span className="font-medium text-gray-900">{comment.user?.full_name}</span>
-                      </div>
-                      <div className="mt-1 text-sm text-gray-700">
-                        {comment.content}
-                      </div>
-                      <div className="mt-2 text-xs text-gray-500">
-                        {new Date(comment.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="mt-4">
-                  <label htmlFor="comment" className="sr-only">Add comment</label>
-                  <div className="flex items-start space-x-4">
-                    <div className="flex-1">
-                      <textarea
-                        id="comment"
-                        rows={3}
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        placeholder="Add a comment..."
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAddComment}
-                      disabled={!newComment.trim()}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                    >
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Comment
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -730,62 +478,6 @@ export default function PitchDeck() {
                     </div>
                   </div>
                 )}
-
-                {/* Collaborators */}
-                <div className="mb-6">
-                  <label className="text-sm font-medium text-gray-700">Collaborators</label>
-                  <div className="mt-2 space-y-4">
-                    {collaborators.map((collaborator) => (
-                      <div key={collaborator.id} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <img
-                            src={collaborator.user?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(collaborator.user?.full_name || 'User')}`}
-                            alt=""
-                            className="h-8 w-8 rounded-full"
-                          />
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{collaborator.user?.full_name}</p>
-                            <p className="text-sm text-gray-500">{collaborator.user?.email}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <select
-                            value={collaborator.role}
-                            onChange={(e) => handleUpdateCollaborator(collaborator.id, e.target.value as 'viewer' | 'editor')}
-                            className="rounded-md border-gray-300 text-sm"
-                          >
-                            <option value="viewer">Can View</option>
-                            <option value="editor">Can Edit</option>
-                          </select>
-                          <button
-                            onClick={() => handleRemoveCollaborator(collaborator.id)}
-                            className="p-1 text-gray-400 hover:text-gray-500"
-                          >
-                            <MinusCircle className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Add Collaborator */}
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="email"
-                        value={newCollaboratorEmail}
-                        onChange={(e) => setNewCollaboratorEmail(e.target.value)}
-                        placeholder="Enter email address"
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      />
-                      <button
-                        onClick={handleAddCollaborator}
-                        disabled={!newCollaboratorEmail}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
 
                 <div className="flex justify-end">
                   <button

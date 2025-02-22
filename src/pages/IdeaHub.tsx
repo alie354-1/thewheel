@@ -7,9 +7,6 @@ import {
   Rocket,
   BarChart3,
   Library,
-  Users,
-  CheckCircle,
-  StickyNote,
   Plus,
   Lightbulb,
   ArrowRight
@@ -29,11 +26,11 @@ export default function IdeaHub() {
   const tools: ToolCard[] = [
     {
       icon: Lightbulb,
-      title: 'Idea Flow',
-      description: 'Refine your startup ideas into buildable concepts with AI guidance.',
+      title: 'Idea Refinement',
+      description: 'Get AI feedback on your startup ideas and explore variations.',
       action: {
-        text: 'Start Ideation',
-        href: '/idea-hub/flow'
+        text: 'Refine Idea',
+        href: '/idea-hub/refinement'
       }
     },
     {
@@ -95,7 +92,7 @@ export default function IdeaHub() {
             </p>
           </div>
           <Link
-            to="/idea-hub/flow"
+            to="/idea-hub/refinement"
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus className="h-4 w-4 mr-2" />
@@ -109,18 +106,17 @@ export default function IdeaHub() {
             <div className="sm:flex sm:items-start sm:justify-between">
               <div className="sm:flex-1">
                 <h2 className="text-xl font-semibold text-white sm:text-2xl">
-                  New: AI-Powered Idea Flow
+                  New: AI-Powered Idea Refinement
                 </h2>
                 <p className="mt-2 text-sm text-indigo-100 sm:text-base">
-                  Take your startup ideas from concept to execution with our new guided workflow.
-                  Get AI feedback at every step and refine your ideas into buildable concepts.
+                  Get instant AI feedback on your startup ideas. Our AI co-founder will help you explore variations and identify opportunities.
                 </p>
                 <div className="mt-4">
                   <Link
-                    to="/idea-hub/flow"
+                    to="/idea-hub/refinement"
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-indigo-50"
                   >
-                    Try Idea Flow
+                    Start Refining Your Idea
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </div>
