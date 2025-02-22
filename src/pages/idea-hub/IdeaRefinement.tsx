@@ -132,7 +132,7 @@ export default function IdeaRefinement() {
       setSuccess('Progress saved successfully!');
 
       if (continueToNext) {
-        // Navigate to market validation step
+        // Navigate to market validation step with the idea ID
         navigate('/idea-hub/market-validation', { 
           state: { ideaId: idea.id }
         });
@@ -557,7 +557,6 @@ export default function IdeaRefinement() {
                     >
                       {variations.filter(v => v.isSelected).length === 1 ? (
                         <>
-                          Continue ```tsx
                           Continue to Market Validation
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </>

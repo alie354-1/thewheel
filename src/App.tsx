@@ -12,6 +12,7 @@ import CompanySettings from './pages/company/CompanySettings';
 import IdeaHub from './pages/IdeaHub';
 import IdeaRefinement from './pages/idea-hub/IdeaRefinement';
 import MarketValidation from './pages/idea-hub/MarketValidation';
+import BusinessGenerator from './pages/idea-hub/BusinessGenerator';
 import AIDiscussion from './pages/idea-hub/AIDiscussion';
 import IdeaCanvas from './pages/idea-hub/IdeaCanvas';
 import MarketResearch from './pages/idea-hub/MarketResearch';
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="idea-hub" element={<IdeaHub />} />
           <Route path="idea-hub/refinement" element={<IdeaRefinement />} />
           <Route path="idea-hub/market-validation" element={<MarketValidation />} />
+          <Route path="idea-hub/business-generator" element={<BusinessGenerator />} />
           <Route path="idea-hub/ai-discussion" element={<AIDiscussion />} />
           <Route path="idea-hub/canvas" element={<IdeaCanvas />} />
           <Route path="idea-hub/market-research" element={<MarketResearch />} />

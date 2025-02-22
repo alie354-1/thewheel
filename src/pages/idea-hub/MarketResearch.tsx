@@ -1,170 +1,168 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, ArrowLeft, Search, Download, ExternalLink, Save, Plus } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  BarChart3,
+  ArrowLeft,
+  Brain,
+  Users,
+  Target,
+  Building,
+  DollarSign,
+  TrendingUp,
+  Save,
+  RotateCw,
+  ArrowRight
+} from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
+import { generateMarketAnalysis } from '../../lib/openai';
 
-interface MarketInsight {
-  title: string;
-  value: string;
-  change: string;
-  trend: 'up' | 'down' | 'neutral';
-}
-
-interface Competitor {
+interface Source {
   name: string;
-  website: string;
-  marketShare: string;
-  strengths: string[];
-  weaknesses: string[];
+  url: string;
+  type: string;
+  year: number;
 }
+
+interface MarketAnalysis {
+  customer_profiles: {
+    segment: string;
+    description: string;
+    needs: string[];
+    pain_points: string[];
+    buying_behavior: string;
+    sources: Source[];
+  }[];
+  early_adopters: {
+    type: string;
+    characteristics: string[];
+    acquisition_strategy: string;
+    sources: Source[];
+  }[];
+  sales_channels: {
+    channel: string;
+    effectiveness: number;
+    cost: string;
+    timeline: string;
+    sources: Source[];
+  }[];
+  pricing_insights: {
+    model: string;
+    price_point: string;
+    justification: string;
+    sources: Source[];
+  }[];
+  market_size: {
+    tam: string;
+    sam: string;
+    som: string;
+    growth_rate: string;
+    sources: Source[];
+  };
+}
+
+const renderSources = (sources: Source[]) => (
+  <div className="mt-4 border-t border-gray-100 pt-4">
+    <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Sources</h5>
+    <div className="space-y-2">
+      {sources.map((source, index) => (
+        <div key={index} className="flex items-start">
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-indigo-600 hover:text-indigo-900"
+          >
+            {source.name}
+            <span className="text-gray-500 ml-2">
+              ({source.year} • {source.type.replace(/_/g, ' ')})
+            </span>
+          </a>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 export default function MarketResearch() {
+  const location = useLocation();
   const { user } = useAuthStore();
-  const [title, setTitle] = useState('Market Analysis');
-  const [researchId, setResearchId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [insights, setInsights] = useState<MarketInsight[]>([
-    {
-      title: 'Market Size',
-      value: '$4.2B',
-      change: '+12.3%',
-      trend: 'up'
-    },
-    {
-      title: 'Growth Rate',
-      value: '15.7%',
-      change: '+2.1%',
-      trend: 'up'
-    },
-    {
-      title: 'Customer Acquisition Cost',
-      value: '$125',
-      change: '-5.2%',
-      trend: 'down'
-    },
-    {
-      title: 'Customer Lifetime Value',
-      value: '$2,450',
-      change: '+8.7%',
-      trend: 'up'
-    }
-  ]);
-
-  const [competitors, setCompetitors] = useState<Competitor[]>([
-    {
-      name: 'CompetitorX',
-      website: 'https://example.com',
-      marketShare: '35%',
-      strengths: ['Brand recognition', 'Large user base', 'Strong partnerships'],
-      weaknesses: ['Outdated technology', 'High prices', 'Poor customer support']
-    },
-    {
-      name: 'CompetitorY',
-      website: 'https://example.com',
-      marketShare: '25%',
-      strengths: ['Modern platform', 'Competitive pricing', 'Innovation'],
-      weaknesses: ['Limited market reach', 'New player', 'Feature gaps']
-    }
-  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [idea, setIdea] = useState<any>(null);
+  const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
+  const [activeTab, setActiveTab] = useState('customer_profiles');
 
   useEffect(() => {
-    const loadResearch = async () => {
-      const { data: research } = await supabase
-        .from('market_research')
+    loadIdea();
+  }, [location.state]);
+
+  const loadIdea = async () => {
+    const ideaId = location.state?.ideaId;
+    if (!ideaId) return;
+
+    try {
+      const { data: idea, error } = await supabase
+        .from('ideas')
         .select('*')
-        .eq('user_id', user?.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
+        .eq('id', ideaId)
         .single();
 
-      if (research) {
-        setResearchId(research.id);
-        setTitle(research.title);
-        setInsights(research.insights);
-        setCompetitors(research.competitors);
-      }
-    };
-
-    if (user) {
-      loadResearch();
-    }
-  }, [user]);
-
-  const handleSave = async () => {
-    if (!user) return;
-    
-    setIsSaving(true);
-    try {
-      if (researchId) {
-        await supabase
-          .from('market_research')
-          .update({
-            title,
-            insights,
-            competitors,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', researchId);
-      } else {
-        const { data } = await supabase
-          .from('market_research')
-          .insert({
-            user_id: user.id,
-            title,
-            insights,
-            competitors
-          })
-          .select()
-          .single();
-
-        if (data) {
-          setResearchId(data.id);
-        }
-      }
+      if (error) throw error;
+      setIdea(idea);
     } catch (error) {
-      console.error('Error saving research:', error);
-    } finally {
-      setIsSaving(false);
+      console.error('Error loading idea:', error);
+      setError('Failed to load idea data');
     }
   };
 
-  const handleNew = () => {
-    setResearchId(null);
-    setTitle('Market Analysis');
-    setInsights([
-      {
-        title: 'Market Size',
-        value: '$0',
-        change: '0%',
-        trend: 'neutral'
-      },
-      {
-        title: 'Growth Rate',
-        value: '0%',
-        change: '0%',
-        trend: 'neutral'
-      },
-      {
-        title: 'Customer Acquisition Cost',
-        value: '$0',
-        change: '0%',
-        trend: 'neutral'
-      },
-      {
-        title: 'Customer Lifetime Value',
-        value: '$0',
-        change: '0%',
-        trend: 'neutral'
-      }
-    ]);
-    setCompetitors([{
-      name: 'New Competitor',
-      website: '',
-      marketShare: '0%',
-      strengths: [],
-      weaknesses: []
-    }]);
+  const handleGenerateAnalysis = async () => {
+    if (!idea) return;
+
+    setIsGenerating(true);
+    setError('');
+
+    try {
+      const analysis = await generateMarketAnalysis(idea);
+      setAnalysis(analysis);
+    } catch (error: any) {
+      console.error('Error generating market analysis:', error);
+      setError(error.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user || !idea || !analysis) return;
+
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const { error: updateError } = await supabase
+        .from('ideas')
+        .update({
+          market_insights: analysis,
+          status: 'validated'
+        })
+        .eq('id', idea.id);
+
+      if (updateError) throw updateError;
+
+      setSuccess('Market analysis saved successfully!');
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (error: any) {
+      console.error('Error saving market analysis:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -176,152 +174,306 @@ export default function MarketResearch() {
             <Link to="/idea-hub" className="mr-4 text-gray-400 hover:text-gray-500">
               <ArrowLeft className="h-6 w-6" />
             </Link>
-            <div className="flex-1">
-              <div className="flex items-center">
-                <BarChart3 className="h-6 w-6 mr-2 text-gray-400" />
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="text-2xl font-semibold text-gray-900 bg-transparent border-none focus:ring-0 focus:outline-none"
-                  placeholder="Enter research title..."
-                />
-              </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
+                <BarChart3 className="h-6 w-6 mr-2" />
+                Market Analysis
+              </h1>
               <p className="mt-1 text-sm text-gray-500">
-                Analyze your market and competition
+                Analyze your market opportunity and competition
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="max-w-xs">
-              <label htmlFor="search" className="sr-only">Search</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="search"
-                  name="search"
-                  id="search"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="Search market data..."
-                />
-              </div>
-            </div>
-            <button
-              onClick={handleNew}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Research
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {isSaving ? 'Saving...' : 'Save Research'}
-            </button>
-          </div>
+          <button
+            onClick={handleGenerateAnalysis}
+            disabled={isGenerating}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                Generating Analysis...
+              </>
+            ) : (
+              <>
+                <Brain className="h-4 w-4 mr-2" />
+                Generate Analysis
+              </>
+            )}
+          </button>
         </div>
 
-        {/* Market Insights */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          {insights.map((insight, index) => (
-            <div key={index} className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {insight.title}
-                      </dt>
-                      <dd className="flex items-baseline">
-                        <div className="text-2xl font-semibold text-gray-900">
-                          {insight.value}
-                        </div>
-                        <div
-                          className={`ml-2 flex items-baseline text-sm font-semibold ${
-                            insight.trend === 'up'
-                              ? 'text-green-600'
-                              : insight.trend === 'down'
-                              ? 'text-red-600'
-                              : 'text-gray-500'
-                          }`}
-                        >
-                          {insight.change}
-                        </div>
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Competitor Analysis */}
-        <div className="bg-white shadow rounded-lg mb-8">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">
-              Competitor Analysis
-            </h3>
+        {error && (
+          <div className="mb-6 rounded-md bg-red-50 p-4">
+            <p className="text-sm text-red-700">{error}</p>
           </div>
-          <div className="px-6 py-5">
-            <div className="grid grid-cols-1 gap-6">
-              {competitors.map((competitor, index) => (
-                <div
-                  key={index}
-                  className="border rounded-lg p-6 hover:border-blue-500 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h4 className="text-lg font-medium text-gray-900">
-                        {competitor.name}
-                      </h4>
-                      <a
-                        href={competitor.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-900 flex items-center"
-                      >
-                        {competitor.website}
-                        <ExternalLink className="h-4 w-4 ml-1" />
-                      </a>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {competitor.marketShare}
+        )}
+
+        {success && (
+          <div className="mb-6 rounded-md bg-green-50 p-4">
+            <p className="text-sm text-green-700">{success}</p>
+          </div>
+        )}
+
+        {/* Analysis Content */}
+        <div className="bg-white shadow rounded-lg">
+          {/* Navigation */}
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex">
+              <button
+                onClick={() => setActiveTab('customer_profiles')}
+                className={`${
+                  activeTab === 'customer_profiles'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center justify-center`}
+              >
+                <Users className="h-5 w-5 mr-2" />
+                Customer Profiles
+              </button>
+              <button
+                onClick={() => setActiveTab('early_adopters')}
+                className={`${
+                  activeTab === 'early_adopters'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center justify-center`}
+              >
+                <Target className="h-5 w-5 mr-2" />
+                Early Adopters
+              </button>
+              <button
+                onClick={() => setActiveTab('sales_channels')}
+                className={`${
+                  activeTab === 'sales_channels'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center justify-center`}
+              >
+                <Building className="h-5 w-5 mr-2" />
+                Sales Channels
+              </button>
+              <button
+                onClick={() => setActiveTab('pricing_insights')}
+                className={`${
+                  activeTab === 'pricing_insights'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center justify-center`}
+              >
+                <DollarSign className="h-5 w-5 mr-2" />
+                Pricing Insights
+              </button>
+              <button
+                onClick={() => setActiveTab('market_size')}
+                className={`${
+                  activeTab === 'market_size'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } flex-1 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center justify-center`}
+              >
+                <TrendingUp className="h-5 w-5 mr-2" />
+                Market Size
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div className="p-6">
+            {!analysis ? (
+              <div className="text-center py-12">
+                <Brain className="h-12 w-12 text-gray-400 mx-auto" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No analysis yet</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Click the "Generate Analysis" button to analyze your market opportunity
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Customer Profiles */}
+                {activeTab === 'customer_profiles' && (
+                  <div className="space-y-6">
+                    {analysis.customer_profiles.map((profile, index) => (
+                      <div key={index} className="bg-white border rounded-lg p-6">
+                        <h4 className="text-lg font-medium text-gray-900 mb-4">{profile.segment}</h4>
+                        <p className="text-gray-600 mb-4">{profile.description}</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">Needs</h5>
+                            <ul className="space-y-2">
+                              {profile.needs.map((need, i) => (
+                                <li key={i} className="text-sm text-gray-600 flex items-start">
+                                  <span className="text-indigo-500 mr-2">•</span>
+                                  {need}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">Pain Points</h5>
+                            <ul className="space-y-2">
+                              {profile.pain_points.map((point, i) => (
+                                <li key={i} className="text-sm text-gray-600 flex items-start">
+                                  <span className="text-red-500 mr-2">•</span>
+                                  {point}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <h5 className="text-sm font-medium text-gray-900 mb-2">Buying Behavior</h5>
+                          <p className="text-sm text-gray-600">{profile.buying_behavior}</p>
+                        </div>
+
+                        {renderSources(profile.sources)}
                       </div>
-                      <div className="text-sm text-gray-500">Market Share</div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Early Adopters */}
+                {activeTab === 'early_adopters' && (
+                  <div className="space-y-6">
+                    {analysis.early_adopters.map((adopter, index) => (
+                      <div key={index} className="bg-white border rounded-lg p-6">
+                        <h4 className="text-lg font-medium text-gray-900 mb-4">{adopter.type}</h4>
+                        
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-900 mb-2">Characteristics</h5>
+                          <ul className="space-y-2">
+                            {adopter.characteristics.map((char, i) => (
+                              <li key={i} className="text-sm text-gray-600 flex items-start">
+                                <span className="text-indigo-500 mr-2">•</span>
+                                {char}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="mt-4">
+                          <h5 className="text-sm font-medium text-gray-900 mb-2">Acquisition Strategy</h5>
+                          <p className="text-sm text-gray-600">{adopter.acquisition_strategy}</p>
+                        </div>
+
+                        {renderSources(adopter.sources)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Sales Channels */}
+                {activeTab === 'sales_channels' && (
+                  <div className="space-y-6">
+                    {analysis.sales_channels.map((channel, index) => (
+                      <div key={index} className="bg-white border rounded-lg p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-lg font-medium text-gray-900">{channel.channel}</h4>
+                          <div className="flex items-center">
+                            <span className="text-sm text-gray-500 mr-2">Effectiveness:</span>
+                            <div className="w-24 h-2 bg-gray-200 rounded-full">
+                              <div
+                                className="h-2 bg-indigo-600 rounded-full"
+                                style={{ width: `${channel.effectiveness * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">Cost</h5>
+                            <p className="text-sm text-gray-600">{channel.cost}</p>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">Timeline</h5>
+                            <p className="text-sm text-gray-600">{channel.timeline}</p>
+                          </div>
+                        </div>
+
+                        {renderSources(channel.sources)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Pricing Insights */}
+                {activeTab === 'pricing_insights' && (
+                  <div className="space-y-6">
+                    {analysis.pricing_insights.map((insight, index) => (
+                      <div key={index} className="bg-white border rounded-lg p-6">
+                        <h4 className="text-lg font-medium text-gray-900 mb-4">{insight.model}</h4>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">Price Point</h5>
+                            <p className="text-sm text-gray-600">{insight.price_point}</p>
+                          </div>
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900 mb-2">Justification</h5>
+                            <p className="text-sm text-gray-600">{insight.justification}</p>
+                          </div>
+                        </div>
+
+                        {renderSources(insight.sources)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Market Size */}
+                {activeTab === 'market_size' && (
+                  <div className="space-y-6">
+                    <div className="bg-white border rounded-lg p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">Total Addressable Market (TAM)</h4>
+                          <p className="text-lg font-semibold text-gray-900">{analysis.market_size.tam}</p>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">Serviceable Addressable Market (SAM)</h4>
+                          <p className="text-lg font-semibold text-gray-900">{analysis.market_size.sam}</p>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">Serviceable Obtainable Market (SOM)</h4>
+                          <p className="text-lg font-semibold text-gray-900">{analysis.market_size.som}</p>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">Growth Rate</h4>
+                          <p className="text-lg font-semibold text-gray-900">{analysis.market_size.growth_rate}</p>
+                        </div>
+                      </div>
+
+                      {renderSources(analysis.market_size.sources)}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <h5 className="text-sm font-medium text-gray-900 mb-2">
-                        Strengths
-                      </h5>
-                      <ul className="list-disc list-inside text-sm text-gray-500">
-                        {competitor.strengths.map((strength, i) => (
-                          <li key={i}>{strength}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-medium text-gray-900 mb-2">
-                        Weaknesses
-                      </h5>
-                      <ul className="list-disc list-inside text-sm text-gray-500">
-                        {competitor.weaknesses.map((weakness, i) => (
-                          <li key={i}>{weakness}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                )}
+              </>
+            )}
+
+            {/* Action Buttons */}
+            {analysis && (
+              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={handleSave}
+                  disabled={isLoading}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Progress
+                </button>
+                <Link
+                  to="/idea-hub/business-model"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Continue to Business Model
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
