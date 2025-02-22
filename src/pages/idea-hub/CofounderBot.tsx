@@ -1,3 +1,4 @@
+// Update the CofounderBot component to properly display feedback
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -105,17 +106,44 @@ export default function CofounderBot() {
   const generateSummary = async () => {
     setIsSummarizing(true);
     try {
-      const { feedback } = await generateTasks(currentEntry, user?.id || '');
+      const { feedback, follow_up_questions } = await generateTasks(currentEntry, user?.id || '');
       
+      // Format feedback into a readable string
+      const formattedFeedback = `🎯 Key Insights
+
+${feedback.strengths.length > 0 ? `Strengths:
+${feedback.strengths.map(s => `• ${s}`).join('\n')}
+
+` : ''}${feedback.areas_for_improvement.length > 0 ? `Areas for Improvement:
+${feedback.areas_for_improvement.map(a => `• ${a}`).join('\n')}
+
+` : ''}${feedback.opportunities.length > 0 ? `Opportunities:
+${feedback.opportunities.map(o => `• ${o}`).join('\n')}
+
+` : ''}${feedback.risks.length > 0 ? `Risks:
+${feedback.risks.map(r => `• ${r}`).join('\n')}
+
+` : ''}${feedback.strategic_recommendations.length > 0 ? `Strategic Recommendations:
+${feedback.strategic_recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
+
       // Add summary message
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: feedback,
+        content: formattedFeedback,
         type: 'summary'
       }]);
 
+      // Add follow-up questions if available
+      if (follow_up_questions && follow_up_questions.length > 0) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `I have a few follow-up questions:\n\n${follow_up_questions.map(q => `• ${q}`).join('\n')}`,
+          type: 'question'
+        }]);
+      }
+
       setIsComplete(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating summary:', error);
       setError('Failed to generate summary. Would you like to try again?');
     } finally {
@@ -172,21 +200,46 @@ export default function CofounderBot() {
 
     try {
       // Generate AI feedback focused on current section
-      const { feedback } = await generateTasks({
+      const { feedback, follow_up_questions } = await generateTasks({
         accomplished: currentSection === 'accomplished' ? currentInput : currentEntry.accomplished,
         working_on: currentSection === 'working_on' ? currentInput : currentEntry.working_on,
         blockers: currentSection === 'blockers' ? currentInput : currentEntry.blockers,
         goals: currentSection === 'goals' ? currentInput : currentEntry.goals
       }, user?.id || '');
 
+      // Format feedback into a conversational response
+      const formattedFeedback = `Here's my analysis:
+
+${feedback.strengths.length > 0 ? `Strengths:
+${feedback.strengths.map(s => `• ${s}`).join('\n')}
+
+` : ''}${feedback.areas_for_improvement.length > 0 ? `Areas to Consider:
+${feedback.areas_for_improvement.map(a => `• ${a}`).join('\n')}
+
+` : ''}${feedback.opportunities.length > 0 ? `Opportunities:
+${feedback.opportunities.map(o => `• ${o}`).join('\n')}
+
+` : ''}${feedback.strategic_recommendations.length > 0 ? `Recommendations:
+${feedback.strategic_recommendations.map(r => `• ${r}`).join('\n')}` : ''}`;
+
       // Add AI feedback message
       const feedbackMessage: Message = {
         role: 'assistant',
-        content: feedback,
+        content: formattedFeedback,
         type: 'feedback',
         section: currentSection
       };
       setMessages(prev => [...prev, feedbackMessage]);
+
+      // Add follow-up questions if available
+      if (follow_up_questions && follow_up_questions.length > 0) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `I have a few follow-up questions:\n\n${follow_up_questions.map(q => `• ${q}`).join('\n')}`,
+          type: 'question',
+          section: currentSection
+        }]);
+      }
 
     } catch (error: any) {
       console.error('Error generating feedback:', error);
@@ -297,7 +350,7 @@ export default function CofounderBot() {
                       <span className="font-medium">Summary</span>
                     </div>
                   )}
-                  {message.content}
+                  <div className="whitespace-pre-wrap">{message.content}</div>
                 </div>
               </div>
             ))}

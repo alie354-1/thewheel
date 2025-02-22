@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
@@ -10,7 +10,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       navigate('/dashboard');
     }

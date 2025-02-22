@@ -56,6 +56,7 @@ export default function IdeaRefinement() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [step, setStep] = useState<'initial' | 'variations' | 'combined'>('initial');
   const [ideaData, setIdeaData] = useState({
     title: '',
     inspiration: '',
@@ -63,7 +64,6 @@ export default function IdeaRefinement() {
   });
   const [variations, setVariations] = useState<Variation[]>([]);
   const [refinedIdeas, setRefinedIdeas] = useState<RefinedIdea[]>([]);
-  const [showRefinementStep, setShowRefinementStep] = useState(false);
 
   const handleSave = async (continueToNext: boolean = false) => {
     if (!user) return;
@@ -157,7 +157,7 @@ export default function IdeaRefinement() {
     try {
       const variations = await generateIdeaVariations(ideaData);
       setVariations(variations);
-      setShowRefinementStep(true);
+      setStep('variations');
     } catch (error: any) {
       console.error('Error generating variations:', error);
       setError(error.message || 'Failed to generate variations');
@@ -217,6 +217,7 @@ export default function IdeaRefinement() {
         selectedVariations
       );
       setRefinedIdeas(combinedIdeas);
+      setStep('combined');
     } catch (error: any) {
       console.error('Error generating combined ideas:', error);
       setError(error.message || 'Failed to generate combined ideas');
@@ -328,6 +329,16 @@ export default function IdeaRefinement() {
     }
   };
 
+  const handleBack = () => {
+    if (step === 'combined') {
+      setStep('variations');
+    } else if (step === 'variations') {
+      setStep('initial');
+    } else {
+      navigate('/idea-hub');
+    }
+  };
+
   return (
     <div className="py-6">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -335,7 +346,7 @@ export default function IdeaRefinement() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center">
             <button
-              onClick={() => navigate('/idea-hub')}
+              onClick={handleBack}
               className="mr-4 text-gray-400 hover:text-gray-500"
             >
               <ArrowLeft className="h-6 w-6" />
@@ -343,10 +354,14 @@ export default function IdeaRefinement() {
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
                 <Lightbulb className="h-6 w-6 mr-2" />
-                Step 1: Initial Idea
+                {step === 'initial' && 'Step 1: Initial Idea'}
+                {step === 'variations' && 'Step 2: Explore Variations'}
+                {step === 'combined' && 'Step 3: Refine Combined Ideas'}
               </h1>
               <p className="mt-1 text-sm text-gray-500">
-                Let's start by exploring your core idea and potential variations
+                {step === 'initial' && "Let's start by exploring your core idea"}
+                {step === 'variations' && 'Select the variations you want to explore further'}
+                {step === 'combined' && 'Choose the best combination of your selected variations'}
               </p>
             </div>
           </div>
@@ -371,65 +386,67 @@ export default function IdeaRefinement() {
 
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="p-6 space-y-6">
-            {/* Core Questions */}
-            <div className="space-y-6">
+            {/* Initial Step */}
+            {step === 'initial' && (
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                    Describe your idea in one sentence
+                  </label>
+                  <input
+                    type="text"
+                    id="title"
+                    value={ideaData.title}
+                    onChange={(e) => setIdeaData(prev => ({ ...prev, title: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="e.g., 'An AI-powered customer service tool' or 'Tutus for ponies!'"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="inspiration" className="block text-sm font-medium text-gray-700">
+                    What inspired this idea?
+                  </label>
+                  <textarea
+                    id="inspiration"
+                    rows={3}
+                    value={ideaData.inspiration}
+                    onChange={(e) => setIdeaData(prev => ({ ...prev, inspiration: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="e.g., 'I hate waiting for customer service calls and think AI could help' or 'I love ponies and think they'd look great in tutus'"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="type" className="block text-sm font-medium text-gray-700">
+                    Do you see this as a product, technology, or service?
+                  </label>
+                  <textarea
+                    id="type"
+                    rows={2}
+                    value={ideaData.type}
+                    onChange={(e) => setIdeaData(prev => ({ ...prev, type: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    placeholder="e.g., 'A physical product line of custom-made tutus' or 'A software tool that uses AI'"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={generateVariations}
+                    disabled={isGenerating}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    {isGenerating ? 'Generating Ideas...' : 'Generate Variations'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Variations Step */}
+            {step === 'variations' && (
               <div>
-                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                  Describe your idea in one sentence
-                </label>
-                <input
-                  type="text"
-                  id="title"
-                  value={ideaData.title}
-                  onChange={(e) => setIdeaData(prev => ({ ...prev, title: e.target.value }))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="e.g., 'An AI-powered customer service tool' or 'Tutus for ponies!'"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="inspiration" className="block text-sm font-medium text-gray-700">
-                  What inspired this idea?
-                </label>
-                <textarea
-                  id="inspiration"
-                  rows={3}
-                  value={ideaData.inspiration}
-                  onChange={(e) => setIdeaData(prev => ({ ...prev, inspiration: e.target.value }))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="e.g., 'I hate waiting for customer service calls and think AI could help' or 'I love ponies and think they'd look great in tutus'"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-                  Do you see this as a product, technology, or service?
-                </label>
-                <textarea
-                  id="type"
-                  rows={2}
-                  value={ideaData.type}
-                  onChange={(e) => setIdeaData(prev => ({ ...prev, type: e.target.value }))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="e.g., 'A physical product line of custom-made tutus' or 'A software tool that uses AI'"
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  onClick={generateVariations}
-                  disabled={isGenerating}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  <Wand2 className="h-4 w-4 mr-2" />
-                  {isGenerating ? 'Generating Ideas...' : 'Generate Variations'}
-                </button>
-              </div>
-            </div>
-
-            {/* AI Variations */}
-            {variations.length > 0 && (
-              <div className="mt-8 pt-6 border-t border-gray-200">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Select Variations to Explore</h3>
                 <div className="space-y-4">
                   {variations.map((variation) => (
@@ -540,6 +557,7 @@ export default function IdeaRefinement() {
                     >
                       {variations.filter(v => v.isSelected).length === 1 ? (
                         <>
+                          Continue ```tsx
                           Continue to Market Validation
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </>
@@ -555,9 +573,9 @@ export default function IdeaRefinement() {
               </div>
             )}
 
-            {/* Combined Options View */}
-            {refinedIdeas.length > 0 && (
-              <div className="mt-8 pt-6 border-t border-gray-200">
+            {/* Combined Ideas Step */}
+            {step === 'combined' && (
+              <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Choose One Combined Concept</h3>
                 
                 {refinedIdeas.map((idea) => (

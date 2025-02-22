@@ -11,11 +11,8 @@ import {
   Lightbulb,
   ArrowRight
 } from 'lucide-react';
-import { useAuthStore } from '../lib/store';
 
 export default function IdeaHub() {
-  const { featureFlags } = useAuthStore();
-
   const tools = [
     {
       icon: Lightbulb,
@@ -24,8 +21,7 @@ export default function IdeaHub() {
       action: {
         text: 'Refine Idea',
         href: '/idea-hub/refinement'
-      },
-      isEnabled: featureFlags.ideaRefinement
+      }
     },
     {
       icon: BarChart3,
@@ -34,8 +30,7 @@ export default function IdeaHub() {
       action: {
         text: 'Validate Market',
         href: '/idea-hub/market-validation'
-      },
-      isEnabled: featureFlags.marketValidation
+      }
     },
     {
       icon: Coins,
@@ -44,8 +39,7 @@ export default function IdeaHub() {
       action: {
         text: 'Build Model',
         href: '/idea-hub/business-model'
-      },
-      isEnabled: featureFlags.businessModel
+      }
     },
     {
       icon: Rocket,
@@ -54,8 +48,7 @@ export default function IdeaHub() {
       action: {
         text: 'Create Deck',
         href: '/idea-hub/pitch-deck'
-      },
-      isEnabled: featureFlags.pitchDeck
+      }
     },
     {
       icon: Bot,
@@ -64,8 +57,7 @@ export default function IdeaHub() {
       action: {
         text: 'Start Discussion',
         href: '/idea-hub/ai-discussion'
-      },
-      isEnabled: featureFlags.aiDiscussion
+      }
     },
     {
       icon: FileSpreadsheet,
@@ -74,10 +66,9 @@ export default function IdeaHub() {
       action: {
         text: 'Open Canvas',
         href: '/idea-hub/canvas'
-      },
-      isEnabled: featureFlags.ideaCanvas
+      }
     }
-  ].filter(tool => tool.isEnabled);
+  ];
 
   return (
     <div className="py-6">
@@ -90,47 +81,43 @@ export default function IdeaHub() {
               Transform your ideas into successful startups
             </p>
           </div>
-          {featureFlags.ideaRefinement && (
-            <Link
-              to="/idea-hub/refinement"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Idea
-            </Link>
-          )}
+          <Link
+            to="/idea-hub/refinement"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Idea
+          </Link>
         </div>
 
         {/* Featured Tool */}
-        {featureFlags.ideaRefinement && (
-          <div className="mb-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg shadow-lg overflow-hidden">
-            <div className="px-6 py-8 sm:p-10">
-              <div className="sm:flex sm:items-start sm:justify-between">
-                <div className="sm:flex-1">
-                  <h2 className="text-xl font-semibold text-white sm:text-2xl">
-                    New: AI-Powered Idea Flow
-                  </h2>
-                  <p className="mt-2 text-sm text-indigo-100 sm:text-base">
-                    Take your startup ideas from concept to execution with our new guided workflow.
-                    Get AI feedback at every step and refine your ideas into buildable concepts.
-                  </p>
-                  <div className="mt-4">
-                    <Link
-                      to="/idea-hub/refinement"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-indigo-50"
-                    >
-                      Try Idea Flow
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </div>
+        <div className="mb-8 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg shadow-lg overflow-hidden">
+          <div className="px-6 py-8 sm:p-10">
+            <div className="sm:flex sm:items-start sm:justify-between">
+              <div className="sm:flex-1">
+                <h2 className="text-xl font-semibold text-white sm:text-2xl">
+                  New: AI-Powered Idea Flow
+                </h2>
+                <p className="mt-2 text-sm text-indigo-100 sm:text-base">
+                  Take your startup ideas from concept to execution with our new guided workflow.
+                  Get AI feedback at every step and refine your ideas into buildable concepts.
+                </p>
+                <div className="mt-4">
+                  <Link
+                    to="/idea-hub/refinement"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-indigo-50"
+                  >
+                    Try Idea Flow
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </div>
-                <div className="mt-4 sm:mt-0 sm:ml-6">
-                  <Lightbulb className="h-12 w-12 text-white opacity-75" />
-                </div>
+              </div>
+              <div className="mt-4 sm:mt-0 sm:ml-6">
+                <Lightbulb className="h-12 w-12 text-white opacity-75" />
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Tools Grid */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

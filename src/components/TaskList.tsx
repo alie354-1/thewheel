@@ -11,23 +11,23 @@ interface Task {
   task_type: string;
   estimated_hours: number;
   due_date: string;
-  implementation_tips?: string[];
-  potential_challenges?: string[];
-  success_metrics?: string[];
-  resources?: {
+  implementation_tips: string[];
+  potential_challenges: string[];
+  success_metrics: string[];
+  resources: {
     title: string;
     url: string;
     type: string;
     description: string;
   }[];
-  learning_resources?: {
+  learning_resources: {
     title: string;
     url: string;
     type: string;
     platform: string;
     description: string;
   }[];
-  tools?: {
+  tools: {
     name: string;
     url: string;
     category: string;
@@ -44,7 +44,7 @@ interface TaskListProps {
 }
 
 const TaskList: React.FC<TaskListProps> = ({
-  tasks,
+  tasks = [], // Provide default empty array
   onUpdateTask,
   onAddTask,
   onRemoveTask,
@@ -69,6 +69,15 @@ const TaskList: React.FC<TaskListProps> = ({
       }
     }));
   };
+
+  // Return early if no tasks
+  if (!tasks || tasks.length === 0) {
+    return (
+      <div className="text-center py-8 bg-white rounded-lg border-2 border-dashed border-gray-300">
+        <p className="text-sm text-gray-500">No tasks available</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

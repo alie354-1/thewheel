@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './lib/supabase';
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './lib/store';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -18,9 +17,7 @@ import IdeaCanvas from './pages/idea-hub/IdeaCanvas';
 import MarketResearch from './pages/idea-hub/MarketResearch';
 import BusinessModel from './pages/idea-hub/BusinessModel';
 import PitchDeck from './pages/idea-hub/PitchDeck';
-import ResourceLibrary from './pages/idea-hub/ResourceLibrary';
 import CofounderBot from './pages/idea-hub/CofounderBot';
-import IdeaFlow from './pages/idea-hub/IdeaFlow';
 import Community from './pages/Community';
 import CommunityPage from './pages/community/CommunityPage';
 import Post from './pages/community/Post';
@@ -40,45 +37,16 @@ function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
   return children;
 }
 
-function App() {
-  const { setUser, fetchProfile } = useAuthStore();
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  useEffect(() => {
-    // Initial auth state
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchProfile(session.user.id);
-      }
-    });
-
-    // Auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          fetchProfile(session.user.id);
-        } else {
-          setUser(null);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleConnect = () => {
-    setIsConnecting(true);
-    // The actual connection will be handled by Supabase's UI
-    // This state is just for showing loading state
-  };
+export default function App() {
+  const { user } = useAuthStore();
 
   return (
-    <Router>
+    <div className="min-h-screen bg-gray-100">
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
+        
+        {/* Protected Routes */}
         <Route path="/" element={
           <PrivateRoute>
             <Layout />
@@ -101,9 +69,7 @@ function App() {
           <Route path="idea-hub/market-research" element={<MarketResearch />} />
           <Route path="idea-hub/business-model" element={<BusinessModel />} />
           <Route path="idea-hub/pitch-deck" element={<PitchDeck />} />
-          <Route path="idea-hub/resources" element={<ResourceLibrary />} />
           <Route path="idea-hub/cofounder-bot" element={<CofounderBot />} />
-          <Route path="idea-hub/flow" element={<IdeaFlow />} />
           <Route path="tasks/new" element={<TaskCreation />} />
           <Route path="tasks/new/company" element={<TaskCreation isCompanyView={true} />} />
           <Route path="company">
@@ -118,8 +84,6 @@ function App() {
           } />
         </Route>
       </Routes>
-    </Router>
+    </div>
   );
 }
-
-export default App;

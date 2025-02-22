@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
-import { Settings, Users, MessageSquare, Slack, Plus, Mail, Key, AlertCircle, Bot, CloudCog } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { 
+  Settings,
+  Users,
+  MessageSquare,
+  Slack,
+  Bot,
+  CloudCog,
+  Key,
+  AlertCircle,
+  ChevronDown,
+  Shield,
+  Plus,
+  Mail
+} from 'lucide-react';
 import OpenAI from 'openai';
 import AppCredentialsSettings from '../components/admin/AppCredentialsSettings';
 import FeatureFlagsSettings from '../components/admin/FeatureFlagsSettings';
@@ -18,7 +32,7 @@ export default function AdminPanel() {
     model: 'gpt-4'
   });
   const [communities, setCommunities] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeSection, setActiveSection] = useState('users');
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
@@ -29,6 +43,16 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const sections = [
+    { id: 'users', name: 'Users', icon: Users },
+    { id: 'credentials', name: 'App Credentials', icon: Key },
+    { id: 'slack', name: 'Slack Settings', icon: Slack },
+    { id: 'openai', name: 'OpenAI Settings', icon: Bot },
+    { id: 'communities', name: 'Communities', icon: MessageSquare },
+    { id: 'feature-flags', name: 'Feature Flags', icon: Settings }
+  ];
 
   useEffect(() => {
     fetchUsers();
@@ -38,53 +62,61 @@ export default function AdminPanel() {
   }, []);
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) setUsers(data);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
   };
 
   const fetchSlackSettings = async () => {
-    const { data, error } = await supabase
-      .from('slack_settings')
-      .select('*')
-      .limit(1)
-      .single();
-    
-    if (data) setSlackSettings(data);
+    try {
+      const { data, error } = await supabase
+        .from('slack_settings')
+        .select('*')
+        .limit(1)
+        .single();
+      
+      if (data) setSlackSettings(data);
+    } catch (error) {
+      console.error('Error loading slack settings:', error);
+    }
   };
 
   const fetchOpenAISettings = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('role', 'superadmin')
-      .limit(1)
-      .single();
-    
-    if (data?.settings?.openai) {
-      setOpenaiSettings(data.settings.openai);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('settings')
+        .eq('role', 'superadmin')
+        .limit(1)
+        .single();
+      
+      if (data?.settings?.openai) {
+        setOpenaiSettings(data.settings.openai);
+      }
+    } catch (error) {
+      console.error('Error loading OpenAI settings:', error);
     }
   };
 
   const fetchCommunities = async () => {
-    const { data, error } = await supabase
-      .from('communities')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) setCommunities(data);
-  };
-
-  const updateUserRole = async (userId: string, role: string) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role })
-      .eq('id', userId);
-
-    if (!error) fetchUsers();
+    try {
+      const { data, error } = await supabase
+        .from('communities')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (data) setCommunities(data);
+    } catch (error) {
+      console.error('Error loading communities:', error);
+    }
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -93,7 +125,6 @@ export default function AdminPanel() {
     setSuccess('');
 
     try {
-      // First create the user in Supabase Auth
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: newUser.email,
         password: newUser.password,
@@ -107,7 +138,6 @@ export default function AdminPanel() {
       if (signUpError) throw signUpError;
 
       if (authData.user) {
-        // Create profile with role and messaging enabled
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([{
@@ -191,82 +221,51 @@ export default function AdminPanel() {
   return (
     <div className="py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-          <Settings className="h-6 w-6" />
-          Admin Panel
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
+            <Shield className="h-6 w-6" />
+            Admin Panel
+          </h1>
 
-        <div className="mt-4 border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
+          <div className="relative">
             <button
-              onClick={() => setActiveTab('users')}
-              className={`${
-                activeTab === 'users'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              <Users className="h-5 w-5 mr-2" />
-              Users
+              {sections.find(s => s.id === activeSection)?.name}
+              <ChevronDown className="ml-2 h-4 w-4" />
             </button>
-            <button
-              onClick={() => setActiveTab('credentials')}
-              className={`${
-                activeTab === 'credentials'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <Key className="h-5 w-5 mr-2" />
-              App Credentials
-            </button>
-            <button
-              onClick={() => setActiveTab('slack')}
-              className={`${
-                activeTab === 'slack'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <Slack className="h-5 w-5 mr-2" />
-              Slack Settings
-            </button>
-            <button
-              onClick={() => setActiveTab('openai')}
-              className={`${
-                activeTab === 'openai'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <Bot className="h-5 w-5 mr-2" />
-              OpenAI Settings
-            </button>
-            <button
-              onClick={() => setActiveTab('communities')}
-              className={`${
-                activeTab === 'communities'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <MessageSquare className="h-5 w-5 mr-2" />
-              Communities
-            </button>
-            <button
-              onClick={() => setActiveTab('feature-flags')}
-              className={`${
-                activeTab === 'feature-flags'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
-            >
-              <Settings className="h-5 w-5 mr-2" />
-              Feature Flags
-            </button>
-          </nav>
+
+            {showDropdown && (
+              <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                <div className="py-1" role="menu">
+                  {sections.map((section) => (
+                    <button
+                      key={section.id}
+                      onClick={() => {
+                        setActiveSection(section.id);
+                        setShowDropdown(false);
+                      }}
+                      className={`
+                        w-full text-left px-4 py-2 text-sm flex items-center
+                        ${activeSection === section.id
+                          ? 'bg-gray-100 text-gray-900'
+                          : 'text-gray-700 hover:bg-gray-50'
+                        }
+                      `}
+                      role="menuitem"
+                    >
+                      <section.icon className="h-4 w-4 mr-3" />
+                      {section.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* Content */}
         <div className="mt-6">
           {error && (
             <div className="mb-4 p-4 bg-red-50 rounded-md flex items-center text-red-800">
@@ -281,7 +280,7 @@ export default function AdminPanel() {
             </div>
           )}
 
-          {activeTab === 'users' && (
+          {activeSection === 'users' && (
             <div className="bg-white shadow-sm rounded-lg">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex justify-between items-center">
@@ -440,11 +439,11 @@ export default function AdminPanel() {
             </div>
           )}
 
-          {activeTab === 'credentials' && (
+          {activeSection === 'credentials' && (
             <AppCredentialsSettings />
           )}
 
-          {activeTab === 'slack' && (
+          {activeSection === 'slack' && (
             <div className="bg-white shadow sm:rounded-lg p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Slack Integration</h3>
               <div className="space-y-6">
@@ -487,7 +486,7 @@ export default function AdminPanel() {
             </div>
           )}
 
-          {activeTab === 'openai' && (
+          {activeSection === 'openai' && (
             <div className="bg-white shadow sm:rounded-lg p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">OpenAI Settings</h3>
               <div className="space-y-6">
@@ -573,10 +572,10 @@ export default function AdminPanel() {
             </div>
           )}
 
-          {activeTab === 'communities' && (
+          {activeSection === 'communities' && (
             <div className="bg-white shadow sm:rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Communities</h3>
+                <h3 className="text-lg font-medium text-gray-900">Communities</h3>
                 <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Community
@@ -596,7 +595,7 @@ export default function AdminPanel() {
             </div>
           )}
 
-          {activeTab === 'feature-flags' && (
+          {activeSection === 'feature-flags' && (
             <FeatureFlagsSettings />
           )}
         </div>
