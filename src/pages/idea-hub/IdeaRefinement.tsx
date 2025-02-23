@@ -68,7 +68,6 @@ export default function IdeaRefinement() {
   const handleSave = async (continueToNext: boolean = false) => {
     if (!user) return;
 
-    // For single selected variation
     const selectedVariations = variations.filter(v => v.isSelected);
     if (selectedVariations.length === 0) {
       setError('Please select at least one variation to continue');
@@ -80,46 +79,48 @@ export default function IdeaRefinement() {
     setSuccess('');
 
     try {
-      // Save the selected variation directly if only one is chosen
-      const selectedIdea = selectedVariations.length === 1 ? {
-        title: selectedVariations[0].title,
-        description: selectedVariations[0].description,
-        target_audience: selectedVariations[0].targetMarket,
-        solution_concept: selectedVariations[0].differentiator,
-        status: 'draft',
-        ai_feedback: {
-          source_elements: [selectedVariations[0].differentiator],
-          revenue_model: selectedVariations[0].revenueModel,
-          original_variations: selectedVariations.map(v => ({
-            title: v.title,
-            description: v.description,
-            differentiator: v.differentiator,
-            target_market: v.targetMarket,
-            revenue_model: v.revenueModel,
-            liked_aspects: v.likedAspects
-          }))
-        }
-      } : {
-        title: refinedIdeas.find(idea => idea.isSelected)?.title || '',
-        description: refinedIdeas.find(idea => idea.isSelected)?.description || '',
-        target_audience: refinedIdeas.find(idea => idea.isSelected)?.targetMarket || '',
-        solution_concept: refinedIdeas.find(idea => idea.isSelected)?.valueProposition || '',
-        status: 'draft',
-        ai_feedback: {
-          source_elements: refinedIdeas.find(idea => idea.isSelected)?.sourceElements || [],
-          revenue_model: refinedIdeas.find(idea => idea.isSelected)?.revenueModel || '',
-          original_variations: variations
-            .filter(v => v.isSelected)
-            .map(v => ({
-              title: v.title,
-              description: v.description,
-              differentiator: v.differentiator,
-              target_market: v.targetMarket,
-              revenue_model: v.revenueModel,
-              liked_aspects: v.likedAspects
-            }))
-        }
-      };
+      // Prepare the idea data based on selection
+      const selectedIdea = selectedVariations.length === 1 
+        ? {
+            title: selectedVariations[0].title,
+            description: selectedVariations[0].description,
+            target_market: selectedVariations[0].targetMarket,
+            solution_concept: selectedVariations[0].differentiator,
+            status: 'draft',
+            ai_feedback: {
+              source_elements: [selectedVariations[0].differentiator],
+              revenue_model: selectedVariations[0].revenueModel,
+              original_variations: selectedVariations.map(v => ({
+                title: v.title,
+                description: v.description,
+                differentiator: v.differentiator,
+                target_market: v.targetMarket,
+                revenue_model: v.revenueModel,
+                liked_aspects: v.likedAspects
+              }))
+            }
+          }
+        : {
+            title: refinedIdeas.find(idea => idea.isSelected)?.title || '',
+            description: refinedIdeas.find(idea => idea.isSelected)?.description || '',
+            target_market: refinedIdeas.find(idea => idea.isSelected)?.targetMarket || '',
+            solution_concept: refinedIdeas.find(idea => idea.isSelected)?.valueProposition || '',
+            status: 'draft',
+            ai_feedback: {
+              source_elements: refinedIdeas.find(idea => idea.isSelected)?.sourceElements || [],
+              revenue_model: refinedIdeas.find(idea => idea.isSelected)?.revenueModel || '',
+              original_variations: variations
+                .filter(v => v.isSelected)
+                .map(v => ({
+                  title: v.title,
+                  description: v.description,
+                  differentiator: v.differentiator,
+                  target_market: v.targetMarket,
+                  revenue_model: v.revenueModel,
+                  liked_aspects: v.likedAspects
+                }))
+            }
+          };
 
       const { data: idea, error: saveError } = await supabase
         .from('ideas')
@@ -131,10 +132,18 @@ export default function IdeaRefinement() {
 
       setSuccess('Progress saved successfully!');
 
-      if (continueToNext) {
-        // Navigate to market validation step with the idea ID
+      if (continueToNext && idea) {
+        // Navigate to market validation step with the idea ID and data
         navigate('/idea-hub/market-validation', { 
-          state: { ideaId: idea.id }
+          state: { 
+            ideaId: idea.id,
+            ideaData: {
+              title: selectedIdea.title,
+              description: selectedIdea.description,
+              target_market: selectedIdea.target_market,
+              solution_concept: selectedIdea.solution_concept
+            }
+          }
         });
       }
     } catch (error: any) {
@@ -155,12 +164,19 @@ export default function IdeaRefinement() {
     setError('');
 
     try {
+      console.log('Generating variations for:', ideaData);
       const variations = await generateIdeaVariations(ideaData);
+      console.log('Received variations:', variations);
+      
+      if (!Array.isArray(variations)) {
+        throw new Error('Invalid response format: variations should be an array');
+      }
+
       setVariations(variations);
       setStep('variations');
     } catch (error: any) {
       console.error('Error generating variations:', error);
-      setError(error.message || 'Failed to generate variations');
+      setError(error.message || 'Failed to generate variations. Please try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -180,7 +196,7 @@ export default function IdeaRefinement() {
         type: ideaData.type
       });
 
-      if (newVariations.length > 0) {
+      if (newVariations && newVariations.length > 0) {
         setVariations(prev => prev.map(v => 
           v.id === variationId ? {
             ...v,
@@ -212,10 +228,17 @@ export default function IdeaRefinement() {
     setError('');
 
     try {
+      console.log('Generating combined ideas from:', selectedVariations);
       const combinedIdeas = await generateCombinedIdeas(
         ideaData.title,
         selectedVariations
       );
+      console.log('Received combined ideas:', combinedIdeas);
+
+      if (!Array.isArray(combinedIdeas)) {
+        throw new Error('Invalid response format: combined ideas should be an array');
+      }
+
       setRefinedIdeas(combinedIdeas);
       setStep('combined');
     } catch (error: any) {

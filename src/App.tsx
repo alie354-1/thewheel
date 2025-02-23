@@ -4,48 +4,43 @@ import { useAuthStore } from './lib/store';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
+import ProfileSetup from './pages/ProfileSetup';
 import Directory from './pages/Directory';
 import AdminPanel from './pages/AdminPanel';
 import CompanySetup from './pages/company/CompanySetup';
 import CompanyDashboard from './pages/company/CompanyDashboard';
 import CompanySettings from './pages/company/CompanySettings';
 import IdeaHub from './pages/IdeaHub';
-import IdeaRefinement from './pages/idea-hub/IdeaRefinement';
-import MarketValidation from './pages/idea-hub/MarketValidation';
-import BusinessGenerator from './pages/idea-hub/BusinessGenerator';
-import AIDiscussion from './pages/idea-hub/AIDiscussion';
-import IdeaCanvas from './pages/idea-hub/IdeaCanvas';
-import MarketResearch from './pages/idea-hub/MarketResearch';
-import BusinessModel from './pages/idea-hub/BusinessModel';
-import PitchDeck from './pages/idea-hub/PitchDeck';
-import CofounderBot from './pages/idea-hub/CofounderBot';
 import Community from './pages/Community';
-import CommunityPage from './pages/community/CommunityPage';
-import Post from './pages/community/Post';
-import NewPost from './pages/community/NewPost';
 import Messages from './pages/Messages';
 import Layout from './components/Layout';
-import TaskCreation from './components/TaskCreation';
 import GoogleCallback from './pages/auth/GoogleCallback';
 
-function PrivateRoute({ children, adminOnly = false, superAdminOnly = false }) {
-  const { user, isAdmin, isSuperAdmin } = useAuthStore();
+function App() {
+  const { user, profile } = useAuthStore();
 
-  if (!user) return <Navigate to="/login" />;
-  if (adminOnly && !isAdmin) return <Navigate to="/dashboard" />;
-  if (superAdminOnly && !isSuperAdmin) return <Navigate to="/dashboard" />;
+  // If user is not logged in, show login page
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
 
-  return children;
-}
-
-export default function App() {
-  const { user } = useAuthStore();
+  // If user is logged in but hasn't completed profile setup and isn't on the setup page,
+  // redirect to setup
+  if (!profile?.full_name && window.location.pathname !== '/profile-setup') {
+    return <Navigate to="/profile-setup" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
       <Routes>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
+        <Route path="/login" element={<Navigate to="/dashboard" replace />} />
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
+        <Route path="/profile-setup" element={<ProfileSetup />} />
         
         {/* Protected Routes */}
         <Route path="/" element={
@@ -59,33 +54,33 @@ export default function App() {
           <Route path="directory" element={<Directory />} />
           <Route path="messages" element={<Messages />} />
           <Route path="community" element={<Community />} />
-          <Route path="community/:slug" element={<CommunityPage />} />
-          <Route path="community/post/:id" element={<Post />} />
-          <Route path="community/new-post" element={<NewPost />} />
-          <Route path="idea-hub" element={<IdeaHub />} />
-          <Route path="idea-hub/refinement" element={<IdeaRefinement />} />
-          <Route path="idea-hub/market-validation" element={<MarketValidation />} />
-          <Route path="idea-hub/business-generator" element={<BusinessGenerator />} />
-          <Route path="idea-hub/ai-discussion" element={<AIDiscussion />} />
-          <Route path="idea-hub/canvas" element={<IdeaCanvas />} />
-          <Route path="idea-hub/market-research" element={<MarketResearch />} />
-          <Route path="idea-hub/business-model" element={<BusinessModel />} />
-          <Route path="idea-hub/pitch-deck" element={<PitchDeck />} />
-          <Route path="idea-hub/cofounder-bot" element={<CofounderBot />} />
-          <Route path="tasks/new" element={<TaskCreation />} />
-          <Route path="tasks/new/company" element={<TaskCreation isCompanyView={true} />} />
+          <Route path="idea-hub/*" element={<IdeaHub />} />
           <Route path="company">
             <Route path="setup" element={<CompanySetup />} />
             <Route path="dashboard" element={<CompanyDashboard />} />
             <Route path="settings" element={<CompanySettings />} />
           </Route>
-          <Route path="admin" element={
-            <PrivateRoute adminOnly>
-              <AdminPanel />
-            </PrivateRoute>
-          } />
+          <Route path="admin" element={<AdminPanel />} />
         </Route>
       </Routes>
     </div>
   );
 }
+
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { user, profile } = useAuthStore();
+  
+  // Redirect to login if not authenticated
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Redirect to profile setup if profile is incomplete
+  if (!profile?.full_name) {
+    return <Navigate to="/profile-setup" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+export default App;

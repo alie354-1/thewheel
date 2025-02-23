@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   BarChart3,
   ArrowRight,
@@ -23,9 +23,18 @@ interface MarketSuggestions {
   integration_needs: string[];
 }
 
-export default function MarketValidationQuestions() {
+interface MarketValidationQuestionsProps {
+  ideaId: string;
+  ideaData: {
+    title: string;
+    description: string;
+    target_market: string;
+    solution_concept: string;
+  };
+}
+
+export default function MarketValidationQuestions({ ideaId, ideaData }: MarketValidationQuestionsProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -47,46 +56,17 @@ export default function MarketValidationQuestions() {
     integration_needs: ''
   });
 
-  // Load idea data from previous step
   useEffect(() => {
-    const loadIdea = async () => {
-      const ideaId = location.state?.ideaId;
-      if (!ideaId) {
-        navigate('/idea-hub/refinement');
-        return;
-      }
+    // Auto-generate suggestions when component mounts
+    handleGenerateSuggestions();
+  }, [ideaData]);
 
-      try {
-        const { data: idea, error } = await supabase
-          .from('ideas')
-          .select('*')
-          .eq('id', ideaId)
-          .single();
-
-        if (error) throw error;
-
-        if (idea) {
-          handleGenerateSuggestions(idea);
-        }
-      } catch (error) {
-        console.error('Error loading idea:', error);
-        setError('Failed to load idea data. Please try again.');
-      }
-    };
-
-    loadIdea();
-  }, [location.state]);
-
-  const handleGenerateSuggestions = async (idea?: any) => {
+  const handleGenerateSuggestions = async () => {
     setIsGenerating(true);
     setError('');
 
     try {
-      const suggestions = await generateMarketSuggestions(idea || {
-        title: "Market Validation",
-        description: "Generate market suggestions"
-      });
-
+      const suggestions = await generateMarketSuggestions(ideaData);
       setSuggestions(suggestions);
     } catch (error: any) {
       console.error('Error generating suggestions:', error);
@@ -146,23 +126,20 @@ export default function MarketValidationQuestions() {
     setSuccess('');
 
     try {
-      const ideaId = location.state?.ideaId;
-      if (ideaId) {
-        const { error: updateError } = await supabase
-          .from('ideas')
-          .update({
-            market_insights: selectedSuggestions,
-            status: 'exploring'
-          })
-          .eq('id', ideaId);
+      const { error: updateError } = await supabase
+        .from('ideas')
+        .update({
+          market_insights: selectedSuggestions,
+          status: 'exploring'
+        })
+        .eq('id', ideaId);
 
-        if (updateError) throw updateError;
-      }
+      if (updateError) throw updateError;
 
       setSuccess('Market validation saved successfully!');
       setTimeout(() => {
         navigate('/idea-hub/market-research', {
-          state: { ideaId: location.state?.ideaId }
+          state: { ideaId }
         });
       }, 1500);
     } catch (error: any) {
@@ -350,7 +327,7 @@ export default function MarketValidationQuestions() {
             </button>
             <button
               onClick={() => navigate('/idea-hub/market-research', {
-                state: { ideaId: location.state?.ideaId }
+                state: { ideaId }
               })}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
             >

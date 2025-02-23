@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
 import { useAuthStore } from '../lib/store';
-import { supabase } from '../lib/supabase';
 import { 
   Settings,
   Users,
@@ -10,213 +8,45 @@ import {
   Bot,
   CloudCog,
   Key,
-  AlertCircle,
-  ChevronDown,
-  Shield,
-  Plus,
-  Mail
+  Shield
 } from 'lucide-react';
-import OpenAI from 'openai';
 import AppCredentialsSettings from '../components/admin/AppCredentialsSettings';
 import FeatureFlagsSettings from '../components/admin/FeatureFlagsSettings';
+import UserManagement from '../components/admin/UserManagement';
+import OpenAISettings from '../components/admin/OpenAISettings';
 
 export default function AdminPanel() {
   const { profile } = useAuthStore();
-  const [users, setUsers] = useState<any[]>([]);
-  const [slackSettings, setSlackSettings] = useState<any>({
-    workspace_id: '',
-    bot_token: ''
-  });
-  const [openaiSettings, setOpenaiSettings] = useState<any>({
-    api_key: '',
-    model: 'gpt-4'
-  });
-  const [communities, setCommunities] = useState<any[]>([]);
   const [activeSection, setActiveSection] = useState('users');
-  const [isAddingUser, setIsAddingUser] = useState(false);
-  const [newUser, setNewUser] = useState({
-    email: '',
-    password: '',
-    role: 'user',
-    full_name: ''
-  });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
 
   const sections = [
     { id: 'users', name: 'Users', icon: Users },
-    { id: 'credentials', name: 'App Credentials', icon: Key },
-    { id: 'slack', name: 'Slack Settings', icon: Slack },
     { id: 'openai', name: 'OpenAI Settings', icon: Bot },
-    { id: 'communities', name: 'Communities', icon: MessageSquare },
+    { id: 'credentials', name: 'App Credentials', icon: Key },
     { id: 'feature-flags', name: 'Feature Flags', icon: Settings }
   ];
 
-  useEffect(() => {
-    fetchUsers();
-    fetchSlackSettings();
-    fetchOpenAISettings();
-    fetchCommunities();
-  }, []);
-
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  };
-
-  const fetchSlackSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('slack_settings')
-        .select('*')
-        .limit(1)
-        .single();
-      
-      if (data) setSlackSettings(data);
-    } catch (error) {
-      console.error('Error loading slack settings:', error);
-    }
-  };
-
-  const fetchOpenAISettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('role', 'superadmin')
-        .limit(1)
-        .single();
-      
-      if (data?.settings?.openai) {
-        setOpenaiSettings(data.settings.openai);
-      }
-    } catch (error) {
-      console.error('Error loading OpenAI settings:', error);
-    }
-  };
-
-  const fetchCommunities = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('communities')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (data) setCommunities(data);
-    } catch (error) {
-      console.error('Error loading communities:', error);
-    }
-  };
-
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: newUser.email,
-        password: newUser.password,
-        options: {
-          data: {
-            full_name: newUser.full_name
-          }
-        }
-      });
-
-      if (signUpError) throw signUpError;
-
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([{
-            id: authData.user.id,
-            email: newUser.email,
-            full_name: newUser.full_name,
-            role: newUser.role,
-            allows_messages: true,
-            is_public: true
-          }]);
-
-        if (profileError) throw profileError;
-
-        setSuccess('User created successfully');
-        setNewUser({
-          email: '',
-          password: '',
-          role: 'user',
-          full_name: ''
-        });
-        setIsAddingUser(false);
-        fetchUsers();
-      }
-    } catch (error: any) {
-      setError(error.message || 'Failed to create user');
-    }
-  };
-
-  const handleSaveSlackSettings = async () => {
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('slack_settings')
-        .upsert([slackSettings]);
-
-      if (error) throw error;
-      setSuccess('Slack settings saved successfully');
-    } catch (error: any) {
-      setError(error.message || 'Failed to save Slack settings');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveOpenAISettings = async () => {
-    setIsSaving(true);
-    try {
-      // Test the API key before saving
-      const openai = new OpenAI({
-        apiKey: openaiSettings.api_key,
-        dangerouslyAllowBrowser: true
-      });
-      
-      const testResponse = await openai.chat.completions.create({
-        model: openaiSettings.model,
-        messages: [{ role: 'user', content: 'Test connection' }],
-      });
-
-      if (!testResponse.choices[0].message.content) {
-        throw new Error('Failed to test OpenAI connection');
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          settings: {
-            openai: openaiSettings
-          }
-        })
-        .eq('role', 'superadmin');
-
-      if (error) throw error;
-      setSuccess('OpenAI settings saved successfully');
-    } catch (error: any) {
-      setError(error.message || 'Failed to save OpenAI settings');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  if (!profile?.role || !['admin', 'superadmin'].includes(profile.role)) {
+    return (
+      <div className="py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-yellow-50 rounded-lg p-4">
+            <div className="flex">
+              <Shield className="h-5 w-5 text-yellow-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Access Restricted
+                </h3>
+                <p className="mt-2 text-sm text-yellow-700">
+                  You don't have permission to access the admin panel.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-6">
@@ -227,377 +57,30 @@ export default function AdminPanel() {
             Admin Panel
           </h1>
 
-          <div className="relative">
-            <button
-              onClick={() => setShowDropdown(!showDropdown)}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {sections.find(s => s.id === activeSection)?.name}
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </button>
-
-            {showDropdown && (
-              <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                <div className="py-1" role="menu">
-                  {sections.map((section) => (
-                    <button
-                      key={section.id}
-                      onClick={() => {
-                        setActiveSection(section.id);
-                        setShowDropdown(false);
-                      }}
-                      className={`
-                        w-full text-left px-4 py-2 text-sm flex items-center
-                        ${activeSection === section.id
-                          ? 'bg-gray-100 text-gray-900'
-                          : 'text-gray-700 hover:bg-gray-50'
-                        }
-                      `}
-                      role="menuitem"
-                    >
-                      <section.icon className="h-4 w-4 mr-3" />
-                      {section.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="flex space-x-4">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium ${
+                  activeSection === section.id
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <section.icon className="h-5 w-5 mr-2" />
+                {section.name}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Content */}
-        <div className="mt-6">
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 rounded-md flex items-center text-red-800">
-              <AlertCircle className="h-5 w-5 mr-2" />
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="mb-4 p-4 bg-green-50 rounded-md text-green-800">
-              {success}
-            </div>
-          )}
-
-          {activeSection === 'users' && (
-            <div className="bg-white shadow-sm rounded-lg">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-medium text-gray-900">User Management</h2>
-                  <button
-                    onClick={() => setIsAddingUser(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add User
-                  </button>
-                </div>
-
-                {isAddingUser && (
-                  <div className="mt-4">
-                    <form onSubmit={handleAddUser} className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Full Name
-                        </label>
-                        <input
-                          type="text"
-                          value={newUser.full_name}
-                          onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
-                          required
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Email
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Mail className="h-5 w-5 text-gray-400" />
-                          </div>
-                          <input
-                            type="email"
-                            value={newUser.email}
-                            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                            required
-                            className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Password
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Key className="h-5 w-5 text-gray-400" />
-                          </div>
-                          <input
-                            type="password"
-                            value={newUser.password}
-                            onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                            required
-                            minLength={6}
-                            className="block w-full pl-10 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">
-                          Role
-                        </label>
-                        <select
-                          value={newUser.role}
-                          onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                          {profile?.role === 'superadmin' && (
-                            <option value="superadmin">Super Admin</option>
-                          )}
-                        </select>
-                      </div>
-                      <div className="flex justify-end space-x-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsAddingUser(false);
-                            setError('');
-                            setSuccess('');
-                          }}
-                          className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-                        >
-                          Create User
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User
-                    </th>
-                    <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Role
-                    </th>
-                    <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.full_name || 'No name'}
-                            </div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          value={user.role}
-                          onChange={(e) => updateUserRole(user.id, e.target.value)}
-                          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                          disabled={user.id === profile?.id}
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                          {profile?.role === 'superadmin' && (
-                            <option value="superadmin">Super Admin</option>
-                          )}
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.allows_messages ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {user.allows_messages ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {activeSection === 'credentials' && (
-            <AppCredentialsSettings />
-          )}
-
-          {activeSection === 'slack' && (
-            <div className="bg-white shadow sm:rounded-lg p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Slack Integration</h3>
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="workspace_id" className="block text-sm font-medium text-gray-700">
-                    Workspace ID
-                  </label>
-                  <input
-                    type="text"
-                    name="workspace_id"
-                    id="workspace_id"
-                    value={slackSettings.workspace_id}
-                    onChange={(e) => setSlackSettings({ ...slackSettings, workspace_id: e.target.value })}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="bot_token" className="block text-sm font-medium text-gray-700">
-                    Bot Token
-                  </label>
-                  <input
-                    type="password"
-                    name="bot_token"
-                    id="bot_token"
-                    value={slackSettings.bot_token}
-                    onChange={(e) => setSlackSettings({ ...slackSettings, bot_token: e.target.value })}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSaveSlackSettings}
-                    disabled={isSaving}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                  >
-                    {isSaving ? 'Saving...' : 'Save Settings'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'openai' && (
-            <div className="bg-white shadow sm:rounded-lg p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">OpenAI Settings</h3>
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="api_key" className="block text-sm font-medium text-gray-700">
-                    API Key
-                  </label>
-                  <div className="mt-1 flex rounded-md shadow-sm">
-                    <input
-                      type="password"
-                      name="api_key"
-                      id="api_key"
-                      value={openaiSettings.api_key}
-                      onChange={(e) => setOpenaiSettings({ ...openaiSettings, api_key: e.target.value })}
-                      className="flex-1 min-w-0 block w-full rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      placeholder="sk-..."
-                    />
-                    <button
-                      onClick={async () => {
-                        try {
-                          setIsSaving(true);
-                          const openai = new OpenAI({
-                            apiKey: openaiSettings.api_key,
-                            dangerouslyAllowBrowser: true
-                          });
-                          
-                          const response = await openai.chat.completions.create({
-                            model: openaiSettings.model,
-                            messages: [{ role: 'user', content: 'Test connection' }],
-                          });
-                          
-                          if (response.choices[0].message.content) {
-                            setSuccess('OpenAI connection successful!');
-                          }
-                        } catch (error: any) {
-                          setError(error.message || 'Failed to test OpenAI connection');
-                        } finally {
-                          setIsSaving(false);
-                        }
-                      }}
-                      className="relative -ml-px inline-flex items-center space-x-2 rounded-r-md border border-gray-300 bg-gray-50 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      Test Connection
-                    </button>
-                  </div>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Get your API key from{' '}
-                    <a
-                      href="https://platform.openai.com/api-keys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:text-indigo-900"
-                    >
-                      OpenAI's platform
-                    </a>
-                  </p>
-                </div>
-                <div>
-                  <label htmlFor="model" className="block text-sm font-medium text-gray-700">
-                    Default Model
-                  </label>
-                  <select
-                    id="model"
-                    name="model"
-                    value={openaiSettings.model}
-                    onChange={(e) => setOpenaiSettings({ ...openaiSettings, model: e.target.value })}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                  >
-                    <option value="gpt-4">GPT-4 (Recommended)</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                  </select>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleSaveOpenAISettings}
-                    disabled={isSaving}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                  >
-                    {isSaving ? 'Saving...' : 'Save Settings'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'communities' && (
-            <div className="bg-white shadow sm:rounded-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-medium text-gray-900">Communities</h3>
-                <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Community
-                </button>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                {communities.map((community) => (
-                  <div
-                    key={community.id}
-                    className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <h4 className="text-lg font-medium text-gray-900">{community.name}</h4>
-                    <p className="mt-1 text-sm text-gray-500">{community.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeSection === 'feature-flags' && (
-            <FeatureFlagsSettings />
-          )}
+        <div className="space-y-6">
+          {activeSection === 'users' && <UserManagement />}
+          {activeSection === 'openai' && <OpenAISettings />}
+          {activeSection === 'credentials' && <AppCredentialsSettings />}
+          {activeSection === 'feature-flags' && <FeatureFlagsSettings />}
         </div>
       </div>
     </div>

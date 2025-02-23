@@ -1,133 +1,121 @@
-// Add to existing imports
 import { create } from 'zustand';
 import { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
-// Add new interface for feature flags
-interface FeatureFlags {
-  // Idea Hub Features
-  ideaRefinement: boolean;
-  marketValidation: boolean;
-  businessModel: boolean;
-  pitchDeck: boolean;
-  aiDiscussion: boolean;
-  ideaCanvas: boolean;
-  marketResearch: boolean;
-  
-  // Community Features
-  communityDiscussions: boolean;
-  communityEvents: boolean;
-  communityResources: boolean;
-  communityMentoring: boolean;
-  
-  // Company Features
-  companySetup: boolean;
-  companyDashboard: boolean;
-  companyDocuments: boolean;
-  companyTeam: boolean;
-  companyProgress: boolean;
-  
-  // AI Features
-  aiCofounder: boolean;
-  aiTaskGeneration: boolean;
-  aiStrategicAnalysis: boolean;
-  
-  // Tool Features
-  toolRecommendations: boolean;
-  toolIntegrations: boolean;
-  toolMarketplace: boolean;
-  
-  // Directory Features
-  userDirectory: boolean;
-  companyDirectory: boolean;
-  mentorDirectory: boolean;
-  
-  // Messaging Features
-  directMessages: boolean;
-  groupChats: boolean;
-  notifications: boolean;
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  role: 'user' | 'admin' | 'superadmin';
+  is_public: boolean;
+  allows_messages: boolean;
+  settings?: Record<string, any>;
+  setup_progress?: {
+    current_step: string;
+    completed_steps: string[];
+    form_data: Record<string, any>;
+  };
 }
 
-// Update AuthStore interface
+// Add FeatureFlags type
+export interface FeatureFlags {
+  [key: string]: {
+    enabled: boolean;
+    visible: boolean;
+  };
+}
+
 interface AuthStore {
   user: User | null;
   profile: UserProfile | null;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isLoading: boolean;
   featureFlags: FeatureFlags;
   setUser: (user: User | null) => void;
   setProfile: (profile: UserProfile | null) => void;
-  setFeatureFlags: (flags: FeatureFlags) => void;
+  setFeatureFlags: (flags: Partial<FeatureFlags>) => void;
+  updateSetupProgress: (progress: {
+    current_step: string;
+    completed_steps: string[];
+    form_data: Record<string, any>;
+  } | null) => Promise<void>;
   fetchProfile: (userId: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
-// Default feature flags
-const defaultFeatureFlags: FeatureFlags = {
-  // Idea Hub Features
-  ideaRefinement: false,
-  marketValidation: false,
-  businessModel: false,
-  pitchDeck: false,
-  aiDiscussion: false,
-  ideaCanvas: false,
-  marketResearch: false,
-  
-  // Community Features
-  communityDiscussions: false,
-  communityEvents: false,
-  communityResources: false,
-  communityMentoring: false,
-  
-  // Company Features
-  companySetup: true, // Keep core company features enabled by default
-  companyDashboard: true,
-  companyDocuments: true,
-  companyTeam: true,
-  companyProgress: true,
-  
-  // AI Features
-  aiCofounder: false,
-  aiTaskGeneration: false,
-  aiStrategicAnalysis: false,
-  
-  // Tool Features
-  toolRecommendations: false,
-  toolIntegrations: false,
-  toolMarketplace: false,
-  
-  // Directory Features
-  userDirectory: true,
-  companyDirectory: true,
-  mentorDirectory: false,
-  
-  // Messaging Features
-  directMessages: true,
-  groupChats: false,
-  notifications: true
-};
-
-// Update store implementation
-export const useAuthStore = create<AuthStore>((set) => ({
+export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   profile: null,
   isAdmin: false,
   isSuperAdmin: false,
-  featureFlags: defaultFeatureFlags,
+  isLoading: true,
+  featureFlags: {
+    ideaHub: { enabled: true, visible: true },
+    community: { enabled: true, visible: true },
+    messages: { enabled: true, visible: true },
+    directory: { enabled: true, visible: true },
+    library: { enabled: false, visible: false },
+    marketplace: { enabled: false, visible: false },
+    legalHub: { enabled: false, visible: false },
+    devHub: { enabled: false, visible: false },
+    utilities: { enabled: false, visible: false },
+    financeHub: { enabled: false, visible: false },
+    adminPanel: { enabled: true, visible: true }
+  },
+
   setUser: (user) => set({ user }),
+  
   setProfile: (profile) => set({
     profile,
     isAdmin: profile?.role === 'admin' || profile?.role === 'superadmin',
     isSuperAdmin: profile?.role === 'superadmin'
   }),
-  setFeatureFlags: (flags) => set({ featureFlags: flags }),
+
+  setFeatureFlags: (flags) => set(state => ({
+    featureFlags: {
+      ...state.featureFlags,
+      ...flags
+    }
+  })),
+
+  updateSetupProgress: async (progress) => {
+    const { user } = get();
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          setup_progress: progress,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      set(state => ({
+        profile: state.profile ? {
+          ...state.profile,
+          setup_progress: progress
+        } : null
+      }));
+    } catch (error) {
+      console.error('Error updating setup progress:', error);
+      throw error;
+    }
+  },
+
   fetchProfile: async (userId) => {
     try {
+      set({ isLoading: true });
+
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
@@ -138,8 +126,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
         set({
           profile,
           isAdmin: profile.role === 'admin' || profile.role === 'superadmin',
-          isSuperAdmin: profile.role === 'superadmin',
-          featureFlags: profile.settings?.feature_flags || defaultFeatureFlags
+          isSuperAdmin: profile.role === 'superadmin'
         });
       } else {
         // Create new profile with default settings
@@ -148,11 +135,23 @@ export const useAuthStore = create<AuthStore>((set) => ({
           .insert([{
             id: userId,
             email: (await supabase.auth.getUser()).data.user?.email,
-            role: 'user',
-            allows_messages: true,
+            role: 'admin',
             is_public: true,
+            allows_messages: true,
+            setup_progress: {
+              current_step: 'basic',
+              completed_steps: [],
+              form_data: {}
+            },
             settings: {
-              feature_flags: defaultFeatureFlags
+              notifications: {
+                email: true,
+                push: true
+              },
+              privacy: {
+                showProfile: true,
+                allowMessages: true
+              }
             }
           }])
           .select()
@@ -167,23 +166,29 @@ export const useAuthStore = create<AuthStore>((set) => ({
           set({
             profile: newProfile,
             isAdmin: false,
-            isSuperAdmin: false,
-            featureFlags: defaultFeatureFlags
+            isSuperAdmin: false
           });
         }
       }
     } catch (error) {
       console.error('Error in fetchProfile:', error);
+    } finally {
+      set({ isLoading: false });
     }
   },
+
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ 
-      user: null, 
-      profile: null, 
-      isAdmin: false, 
-      isSuperAdmin: false,
-      featureFlags: defaultFeatureFlags
-    });
-  },
+    try {
+      await supabase.auth.signOut();
+      set({ 
+        user: null, 
+        profile: null, 
+        isAdmin: false, 
+        isSuperAdmin: false,
+        isLoading: false
+      });
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  }
 }));

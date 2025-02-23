@@ -1,26 +1,138 @@
 import OpenAI from 'openai';
 import { supabase } from './supabase';
 
-// Get OpenAI client with settings from superadmin profile
+// Get OpenAI client with settings from app_settings table
 async function getOpenAIClient() {
-  const { data: adminSettings } = await supabase
-    .from('profiles')
-    .select('settings')
-    .eq('role', 'superadmin')
-    .limit(1)
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'openai')
     .single();
 
-  if (!adminSettings?.settings?.openai?.api_key) {
-    throw new Error('OpenAI API key not configured. Please contact an administrator.');
+  if (error) {
+    throw new Error('OpenAI settings not found. Please configure OpenAI in the admin panel.');
+  }
+
+  if (!data?.value?.api_key) {
+    throw new Error('OpenAI API key not configured. Please add your API key in the admin panel.');
   }
 
   return {
     client: new OpenAI({
-      apiKey: adminSettings.settings.openai.api_key,
+      apiKey: data.value.api_key,
       dangerouslyAllowBrowser: true
     }),
-    model: adminSettings.settings.openai.model || 'gpt-4'
+    model: data.value.model || 'gpt-4'
   };
+}
+
+// Enhanced helper function to clean and parse JSON response
+function parseOpenAIResponse(content: string, expectedSchema?: Record<string, any>) {
+  if (!content) {
+    throw new Error('Empty response from OpenAI');
+  }
+
+  try {
+    // Remove any markdown code block syntax
+    let cleanContent = content.replace(/```json\s*|\s*```/g, '').trim();
+    
+    // Remove any potential leading/trailing comments or text
+    const jsonStart = cleanContent.indexOf('{');
+    const jsonEnd = cleanContent.lastIndexOf('}');
+    
+    if (jsonStart === -1 || jsonEnd === -1) {
+      throw new Error('No valid JSON object found in response');
+    }
+    
+    cleanContent = cleanContent.slice(jsonStart, jsonEnd + 1);
+
+    // If the content is just an empty object, throw an error
+    if (cleanContent === '{}') {
+      throw new Error('Empty JSON object received');
+    }
+
+    // Parse the cleaned content
+    let parsedData: any;
+    try {
+      parsedData = JSON.parse(cleanContent);
+    } catch (parseError) {
+      // Try to fix common JSON issues
+      cleanContent = cleanContent
+        // Fix unquoted property names
+        .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":')
+        // Fix single quotes
+        .replace(/'/g, '"')
+        // Remove trailing commas
+        .replace(/,(\s*[}\]])/g, '$1');
+      
+      parsedData = JSON.parse(cleanContent);
+    }
+
+    // Validate the parsed data has the expected structure
+    if (typeof parsedData !== 'object' || parsedData === null) {
+      throw new Error('Invalid response format: expected an object');
+    }
+
+    // Validate against expected schema if provided
+    if (expectedSchema) {
+      validateSchema(parsedData, expectedSchema);
+    }
+
+    return parsedData;
+  } catch (error) {
+    console.error('Error parsing OpenAI response:', error);
+    console.error('Raw content:', content);
+    
+    // Provide more helpful error messages
+    if (error instanceof SyntaxError) {
+      const position = parseInt(error.message.match(/position (\d+)/)?.[1] || '0');
+      const context = content.slice(Math.max(0, position - 20), position + 20);
+      throw new Error(`JSON syntax error near: ...${context}...`);
+    }
+    
+    throw new Error(`Failed to parse OpenAI response: ${error.message}`);
+  }
+}
+
+// Schema validation helper
+function validateSchema(data: any, schema: Record<string, any>, path: string = '') {
+  if (schema === null || schema === undefined) {
+    return;
+  }
+
+  if (Array.isArray(schema)) {
+    if (!Array.isArray(data)) {
+      throw new Error(`Expected array at ${path || 'root'}`);
+    }
+    data.forEach((item, index) => {
+      validateSchema(item, schema[0], `${path}[${index}]`);
+    });
+    return;
+  }
+
+  if (typeof schema === 'object') {
+    if (typeof data !== 'object' || data === null) {
+      throw new Error(`Expected object at ${path || 'root'}`);
+    }
+    
+    // Check for required fields
+    Object.entries(schema).forEach(([key, value]) => {
+      if (value && !data.hasOwnProperty(key)) {
+        throw new Error(`Missing required field "${key}" at ${path || 'root'}`);
+      }
+      if (data[key] !== undefined) {
+        validateSchema(data[key], value, path ? `${path}.${key}` : key);
+      }
+    });
+    return;
+  }
+
+  // Type validation
+  const expectedType = typeof schema;
+  const actualType = typeof data;
+  if (actualType !== expectedType && actualType !== 'undefined') {
+    throw new Error(`Type mismatch at ${path}: expected ${expectedType}, got ${actualType}`);
+  }
 }
 
 // Generate AI feedback and tasks
@@ -126,13 +238,17 @@ ${entry.accomplished ? 'Accomplished: ' + entry.accomplished + '\n' : ''}${entry
       throw new Error('No response generated');
     }
 
-    // Parse response
-    const data = JSON.parse(content);
-    return {
-      feedback: data.feedback,
-      follow_up_questions: data.follow_up_questions,
-      tasks: data.tasks
-    };
+    try {
+      const data = parseOpenAIResponse(content);
+      return {
+        feedback: data.feedback,
+        follow_up_questions: data.follow_up_questions,
+        tasks: data.tasks
+      };
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error: any) {
     console.error('Error generating tasks:', error);
     throw new Error(error.message || 'Failed to generate tasks');
@@ -229,20 +345,7 @@ export const generateMarketAnalysis = async (idea: any) => {
       }
     ]
   }
-}
-
-Use real, credible sources like:
-- Gartner reports
-- Forrester research
-- IDC market analysis
-- McKinsey insights
-- Statista data
-- Industry association reports
-- Government data sources
-- Academic research papers
-- Reputable market research firms
-
-For each insight, provide at least 2-3 recent sources (within last 2-3 years when possible).`
+}`
         },
         {
           role: "user",
@@ -264,7 +367,12 @@ Target Market: ${idea.target_market}`
       throw new Error('No response generated');
     }
 
-    return JSON.parse(content);
+    try {
+      return parseOpenAIResponse(content);
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error: any) {
     console.error('Error generating market analysis:', error);
     throw new Error(error.message || 'Failed to generate market analysis');
@@ -308,7 +416,12 @@ Description: ${idea.description}`
       throw new Error('No response generated');
     }
 
-    return JSON.parse(content);
+    try {
+      return parseOpenAIResponse(content);
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error: any) {
     console.error('Error generating market suggestions:', error);
     throw new Error(error.message || 'Failed to generate market suggestions');
@@ -358,12 +471,17 @@ Type: ${idea.type}`
       throw new Error('No response generated');
     }
 
-    const { variations } = JSON.parse(content);
-    return variations.map((v: any) => ({
-      ...v,
-      isSelected: false,
-      isEditing: false
-    }));
+    try {
+      const { variations } = parseOpenAIResponse(content);
+      return variations.map((v: any) => ({
+        ...v,
+        isSelected: false,
+        isEditing: false
+      }));
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error: any) {
     console.error('Error generating idea variations:', error);
     throw new Error(error.message || 'Failed to generate idea variations');
@@ -420,12 +538,17 @@ Liked Aspects: ${v.likedAspects || 'None specified'}
       throw new Error('No response generated');
     }
 
-    const { combined_ideas } = JSON.parse(content);
-    return combined_ideas.map((idea: any) => ({
-      ...idea,
-      isSelected: false,
-      isEditing: false
-    }));
+    try {
+      const { combined_ideas } = parseOpenAIResponse(content);
+      return combined_ideas.map((idea: any) => ({
+        ...idea,
+        isSelected: false,
+        isEditing: false
+      }));
+    } catch (parseError) {
+      console.error('Error parsing OpenAI response:', parseError);
+      throw new Error('Failed to parse AI response. Please try again.');
+    }
   } catch (error: any) {
     console.error('Error generating combined ideas:', error);
     throw new Error(error.message || 'Failed to generate combined ideas');

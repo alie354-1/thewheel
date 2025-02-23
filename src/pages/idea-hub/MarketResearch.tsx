@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   ArrowLeft,
@@ -11,7 +11,11 @@ import {
   TrendingUp,
   Save,
   RotateCw,
-  ArrowRight
+  ArrowRight,
+  Edit2,
+  X,
+  Check,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
@@ -24,15 +28,17 @@ interface Source {
   year: number;
 }
 
+interface CustomerProfile {
+  segment: string;
+  description: string;
+  needs: string[];
+  pain_points: string[];
+  buying_behavior: string;
+  sources: Source[];
+}
+
 interface MarketAnalysis {
-  customer_profiles: {
-    segment: string;
-    description: string;
-    needs: string[];
-    pain_points: string[];
-    buying_behavior: string;
-    sources: Source[];
-  }[];
+  customer_profiles: CustomerProfile[];
   early_adopters: {
     type: string;
     characteristics: string[];
@@ -61,6 +67,10 @@ interface MarketAnalysis {
   };
 }
 
+interface EditableProfile extends CustomerProfile {
+  isEditing: boolean;
+}
+
 const renderSources = (sources: Source[]) => (
   <div className="mt-4 border-t border-gray-100 pt-4">
     <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Sources</h5>
@@ -86,6 +96,7 @@ const renderSources = (sources: Source[]) => (
 
 export default function MarketResearch() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -94,14 +105,29 @@ export default function MarketResearch() {
   const [idea, setIdea] = useState<any>(null);
   const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null);
   const [activeTab, setActiveTab] = useState('customer_profiles');
+  const [editableProfiles, setEditableProfiles] = useState<EditableProfile[]>([]);
 
   useEffect(() => {
     loadIdea();
   }, [location.state]);
 
+  useEffect(() => {
+    if (analysis) {
+      setEditableProfiles(
+        analysis.customer_profiles.map(profile => ({
+          ...profile,
+          isEditing: false
+        }))
+      );
+    }
+  }, [analysis]);
+
   const loadIdea = async () => {
     const ideaId = location.state?.ideaId;
-    if (!ideaId) return;
+    if (!ideaId) {
+      navigate('/idea-hub/refinement');
+      return;
+    }
 
     try {
       const { data: idea, error } = await supabase
@@ -127,12 +153,48 @@ export default function MarketResearch() {
     try {
       const analysis = await generateMarketAnalysis(idea);
       setAnalysis(analysis);
+      setEditableProfiles(
+        analysis.customer_profiles.map(profile => ({
+          ...profile,
+          isEditing: false
+        }))
+      );
     } catch (error: any) {
       console.error('Error generating market analysis:', error);
       setError(error.message);
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const toggleEditProfile = (index: number) => {
+    setEditableProfiles(prev =>
+      prev.map((profile, i) => ({
+        ...profile,
+        isEditing: i === index ? !profile.isEditing : profile.isEditing
+      }))
+    );
+  };
+
+  const updateProfile = (index: number, field: keyof CustomerProfile, value: any) => {
+    setEditableProfiles(prev =>
+      prev.map((profile, i) =>
+        i === index
+          ? {
+              ...profile,
+              [field]: value
+            }
+          : profile
+      )
+    );
+  };
+
+  const handleDeleteProfile = (index: number) => {
+    if (!window.confirm('Are you sure you want to delete this customer profile?')) {
+      return;
+    }
+
+    setEditableProfiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -143,10 +205,16 @@ export default function MarketResearch() {
     setSuccess('');
 
     try {
+      // Update analysis with edited profiles
+      const updatedAnalysis = {
+        ...analysis,
+        customer_profiles: editableProfiles.map(({ isEditing, ...profile }) => profile)
+      };
+
       const { error: updateError } = await supabase
         .from('ideas')
         .update({
-          market_insights: analysis,
+          market_insights: updatedAnalysis,
           status: 'validated'
         })
         .eq('id', idea.id);
@@ -154,6 +222,16 @@ export default function MarketResearch() {
       if (updateError) throw updateError;
 
       setSuccess('Market analysis saved successfully!');
+      setAnalysis(updatedAnalysis);
+      
+      // Reset editing state
+      setEditableProfiles(prev =>
+        prev.map(profile => ({
+          ...profile,
+          isEditing: false
+        }))
+      );
+
       setTimeout(() => {
         setSuccess('');
       }, 3000);
@@ -293,40 +371,162 @@ export default function MarketResearch() {
                 {/* Customer Profiles */}
                 {activeTab === 'customer_profiles' && (
                   <div className="space-y-6">
-                    {analysis.customer_profiles.map((profile, index) => (
+                    {editableProfiles.map((profile, index) => (
                       <div key={index} className="bg-white border rounded-lg p-6">
-                        <h4 className="text-lg font-medium text-gray-900 mb-4">{profile.segment}</h4>
-                        <p className="text-gray-600 mb-4">{profile.description}</p>
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            {profile.isEditing ? (
+                              <input
+                                type="text"
+                                value={profile.segment}
+                                onChange={(e) => updateProfile(index, 'segment', e.target.value)}
+                                className="text-lg font-medium text-gray-900 border-b border-gray-300 focus:border-indigo-500 focus:ring-0 w-full"
+                              />
+                            ) : (
+                              <h4 className="text-lg font-medium text-gray-900">{profile.segment}</h4>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => toggleEditProfile(index)}
+                              className="p-1 rounded-full hover:bg-gray-100"
+                            >
+                              {profile.isEditing ? (
+                                <Check className="h-5 w-5 text-green-500" />
+                              ) : (
+                                <Edit2 className="h-5 w-5 text-gray-400" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProfile(index)}
+                              className="p-1 rounded-full hover:bg-gray-100 text-red-400 hover:text-red-500"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {profile.isEditing ? (
+                          <textarea
+                            value={profile.description}
+                            onChange={(e) => updateProfile(index, 'description', e.target.value)}
+                            className="text-gray-600 mb-4 w-full border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500"
+                            rows={3}
+                          />
+                        ) : (
+                          <p className="text-gray-600 mb-4">{profile.description}</p>
+                        )}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
                             <h5 className="text-sm font-medium text-gray-900 mb-2">Needs</h5>
-                            <ul className="space-y-2">
-                              {profile.needs.map((need, i) => (
-                                <li key={i} className="text-sm text-gray-600 flex items-start">
-                                  <span className="text-indigo-500 mr-2">•</span>
-                                  {need}
-                                </li>
-                              ))}
-                            </ul>
+                            {profile.isEditing ? (
+                              <div className="space-y-2">
+                                {profile.needs.map((need, i) => (
+                                  <div key={i} className="flex items-center">
+                                    <input
+                                      type="text"
+                                      value={need}
+                                      onChange={(e) => {
+                                        const newNeeds = [...profile.needs];
+                                        newNeeds[i] = e.target.value;
+                                        updateProfile(index, 'needs', newNeeds);
+                                      }}
+                                      className="flex-1 text-sm border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const newNeeds = profile.needs.filter((_, idx) => idx !== i);
+                                        updateProfile(index, 'needs', newNeeds);
+                                      }}
+                                      className="ml-2 text-gray-400 hover:text-gray-500"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => {
+                                    updateProfile(index, 'needs', [...profile.needs, '']);
+                                  }}
+                                  className="text-sm text-indigo-600 hover:text-indigo-900"
+                                >
+                                  + Add Need
+                                </button>
+                              </div>
+                            ) : (
+                              <ul className="space-y-2">
+                                {profile.needs.map((need, i) => (
+                                  <li key={i} className="text-sm text-gray-600 flex items-start">
+                                    <span className="text-indigo-500 mr-2">•</span>
+                                    {need}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                           
                           <div>
                             <h5 className="text-sm font-medium text-gray-900 mb-2">Pain Points</h5>
-                            <ul className="space-y-2">
-                              {profile.pain_points.map((point, i) => (
-                                <li key={i} className="text-sm text-gray-600 flex items-start">
-                                  <span className="text-red-500 mr-2">•</span>
-                                  {point}
-                                </li>
-                              ))}
-                            </ul>
+                            {profile.isEditing ? (
+                              <div className="space-y-2">
+                                {profile.pain_points.map((point, i) => (
+                                  <div key={i} className="flex items-center">
+                                    <input
+                                      type="text"
+                                      value={point}
+                                      onChange={(e) => {
+                                        const newPoints = [...profile.pain_points];
+                                        newPoints[i] = e.target.value;
+                                        updateProfile(index, 'pain_points', newPoints);
+                                      }}
+                                      className="flex-1 text-sm border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500"
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const newPoints = profile.pain_points.filter((_, idx) => idx !== i);
+                                        updateProfile(index, 'pain_points', newPoints);
+                                      }}
+                                      className="ml-2 text-gray-400 hover:text-gray-500"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => {
+                                    updateProfile(index, 'pain_points', [...profile.pain_points, '']);
+                                  }}
+                                  className="text-sm text-indigo-600 hover:text-indigo-900"
+                                >
+                                  + Add Pain Point
+                                </button>
+                              </div>
+                            ) : (
+                              <ul className="space-y-2">
+                                {profile.pain_points.map((point, i) => (
+                                  <li key={i} className="text-sm text-gray-600 flex items-start">
+                                    <span className="text-red-500 mr-2">•</span>
+                                    {point}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                         </div>
 
                         <div className="mt-4">
                           <h5 className="text-sm font-medium text-gray-900 mb-2">Buying Behavior</h5>
-                          <p className="text-sm text-gray-600">{profile.buying_behavior}</p>
+                          {profile.isEditing ? (
+                            <textarea
+                              value={profile.buying_behavior}
+                              onChange={(e) => updateProfile(index, 'buying_behavior', e.target.value)}
+                              className="text-sm text-gray-600 w-full border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500"
+                              rows={2}
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-600">{profile.buying_behavior}</p>
+                          )}
                         </div>
 
                         {renderSources(profile.sources)}

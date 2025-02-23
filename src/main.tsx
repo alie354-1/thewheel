@@ -10,22 +10,34 @@ import './index.css';
 const initAuth = async () => {
   const { setUser, fetchProfile } = useAuthStore.getState();
 
-  // Get initial session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
-    setUser(session.user);
-    await fetchProfile(session.user.id);
-  }
+  try {
+    // Get initial session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      throw sessionError;
+    }
 
-  // Listen for auth changes
-  supabase.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
       setUser(session.user);
       await fetchProfile(session.user.id);
-    } else {
-      setUser(null);
     }
-  });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        await fetchProfile(session.user.id);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  } catch (error) {
+    console.error('Error initializing auth:', error);
+  }
 };
 
 // Initialize auth before rendering

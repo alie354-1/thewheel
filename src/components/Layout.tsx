@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../lib/store';
+import type { FeatureFlags } from '../lib/store';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { 
   LayoutDashboard,
@@ -30,37 +31,64 @@ import {
 import { supabase } from '../lib/supabase';
 
 interface NavItem {
+  id: string;
   name: string;
   href: string;
   icon: React.ElementType;
   badge?: string;
-  isEnabled?: boolean;
+  featureFlag?: keyof FeatureFlags;
   children?: NavItem[];
 }
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profile, isAdmin, signOut } = useAuthStore();
+  const { user, profile, isAdmin, signOut, featureFlags } = useAuthStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [hasCompany, setHasCompany] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkCompany = async () => {
-      if (user) {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('id')
-          .eq('owner_id', user.id)
-          .maybeSingle();
-        
-        setHasCompany(!!company);
-      }
-    };
-
-    checkCompany();
+    if (user) {
+      checkCompanyAccess();
+    }
   }, [user]);
+
+  const checkCompanyAccess = async () => {
+    if (!user) return;
+
+    try {
+      setIsLoading(true);
+
+      // Check if user owns any companies
+      const { data: ownedCompanies, error: ownedError } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('owner_id', user.id);
+
+      if (ownedError) throw ownedError;
+
+      if (ownedCompanies && ownedCompanies.length > 0) {
+        setHasCompany(true);
+        return;
+      }
+
+      // Check if user is a member of any companies
+      const { data: memberships, error: memberError } = await supabase
+        .from('company_members')
+        .select('company_id')
+        .eq('user_id', user.id);
+
+      if (memberError) throw memberError;
+
+      setHasCompany(memberships && memberships.length > 0);
+    } catch (error) {
+      console.error('Error checking company access:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -68,33 +96,114 @@ export default function Layout() {
   };
 
   const navigation: NavItem[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, isEnabled: true },
     { 
+      id: 'dashboard',
+      name: 'Dashboard', 
+      href: '/dashboard', 
+      icon: LayoutDashboard
+    },
+    { 
+      id: 'company',
       name: 'My Company', 
       href: hasCompany ? '/company/dashboard' : '/company/setup', 
       icon: Building2,
-      badge: !hasCompany ? 'Setup' : undefined,
-      isEnabled: true
+      badge: !hasCompany && !isLoading ? 'Setup' : undefined
     },
-    { name: 'Messages', href: '/messages', icon: MessageSquare, isEnabled: true },
-    { name: 'Community', href: '/community', icon: Users, isEnabled: true },
-    { name: 'Directory', href: '/directory', icon: BookOpen, isEnabled: true },
-    { name: 'Library', href: '#', icon: FileText, isEnabled: false },
-    { name: 'Marketplace', href: '#', icon: Wallet, isEnabled: false },
-    { name: 'Legal Hub', href: '#', icon: Scale, isEnabled: false },
-    { name: 'Dev Hub', href: '#', icon: Code2, isEnabled: false },
-    { name: 'Utilities', href: '#', icon: Wrench, isEnabled: false },
-    { name: 'Idea Hub', href: '/idea-hub', icon: Lightbulb, isEnabled: true },
-    { name: 'Finance Hub', href: '#', icon: PiggyBank, isEnabled: false },
-    { name: 'Settings', href: '/profile', icon: Settings, isEnabled: true, children: [
-      ...(isAdmin ? [{ name: 'Admin Panel', href: '/admin', icon: Shield, isEnabled: true }] : [])
-    ]},
+    { 
+      id: 'messages',
+      name: 'Messages', 
+      href: '/messages', 
+      icon: MessageSquare,
+      featureFlag: 'messages'
+    },
+    { 
+      id: 'community',
+      name: 'Community', 
+      href: '/community', 
+      icon: Users,
+      featureFlag: 'community'
+    },
+    { 
+      id: 'directory',
+      name: 'Directory', 
+      href: '/directory', 
+      icon: BookOpen,
+      featureFlag: 'directory'
+    },
+    { 
+      id: 'library',
+      name: 'Library', 
+      href: '#', 
+      icon: FileText,
+      featureFlag: 'library'
+    },
+    { 
+      id: 'marketplace',
+      name: 'Marketplace', 
+      href: '#', 
+      icon: Wallet,
+      featureFlag: 'marketplace'
+    },
+    { 
+      id: 'legal',
+      name: 'Legal Hub', 
+      href: '#', 
+      icon: Scale,
+      featureFlag: 'legalHub'
+    },
+    { 
+      id: 'dev',
+      name: 'Dev Hub', 
+      href: '#', 
+      icon: Code2,
+      featureFlag: 'devHub'
+    },
+    { 
+      id: 'utilities',
+      name: 'Utilities', 
+      href: '#', 
+      icon: Wrench,
+      featureFlag: 'utilities'
+    },
+    { 
+      id: 'idea-hub',
+      name: 'Idea Hub', 
+      href: '/idea-hub', 
+      icon: Lightbulb,
+      featureFlag: 'ideaHub'
+    },
+    { 
+      id: 'finance',
+      name: 'Finance Hub', 
+      href: '#', 
+      icon: PiggyBank,
+      featureFlag: 'financeHub'
+    },
+    { 
+      id: 'settings',
+      name: 'Settings', 
+      href: '/profile', 
+      icon: Settings
+    },
+    { 
+      id: 'admin',
+      name: 'Admin Panel', 
+      href: '/admin', 
+      icon: Shield,
+      featureFlag: 'adminPanel'
+    }
   ];
 
   const renderNavItem = (item: NavItem) => {
-    if (!item.isEnabled) {
+    // Skip rendering if feature is not visible
+    if (item.featureFlag && !featureFlags[item.featureFlag].visible) {
+      return null;
+    }
+
+    // Show disabled state if feature is not enabled
+    if (item.featureFlag && !featureFlags[item.featureFlag].enabled) {
       return (
-        <Tooltip.Provider>
+        <Tooltip.Provider key={item.id}>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
               <div className="flex items-center px-2 py-2 text-sm font-medium text-gray-400 cursor-not-allowed rounded-md group">
@@ -119,6 +228,7 @@ export default function Layout() {
 
     return (
       <Link
+        key={item.id}
         to={item.href}
         className={`${
           location.pathname === item.href
@@ -133,53 +243,6 @@ export default function Layout() {
               : 'text-gray-400 group-hover:text-gray-500'
           } mr-3 h-5 w-5`}
         />
-        {item.name}
-        {item.badge && (
-          <span className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-            {item.badge}
-          </span>
-        )}
-      </Link>
-    );
-  };
-
-  const renderMobileNavItem = (item: NavItem) => {
-    if (!item.isEnabled) {
-      return (
-        <Tooltip.Provider>
-          <Tooltip.Root>
-            <Tooltip.Trigger asChild>
-              <div className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-400 flex items-center cursor-not-allowed group">
-                <item.icon className="h-5 w-5 mr-2" />
-                {item.name}
-                <Construction className="h-4 w-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </Tooltip.Trigger>
-            <Tooltip.Portal>
-              <Tooltip.Content
-                className="bg-gray-900 text-white px-3 py-1.5 rounded text-sm"
-                sideOffset={5}
-              >
-                Coming Soon
-                <Tooltip.Arrow className="fill-gray-900" />
-              </Tooltip.Content>
-            </Tooltip.Portal>
-          </Tooltip.Root>
-        </Tooltip.Provider>
-      );
-    }
-
-    return (
-      <Link
-        to={item.href}
-        className={`${
-          location.pathname === item.href
-            ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
-            : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
-        } block pl-3 pr-4 py-2 border-l-4 text-base font-medium flex items-center`}
-        onClick={() => setIsMobileMenuOpen(false)}
-      >
-        <item.icon className="h-5 w-5 mr-2" />
         {item.name}
         {item.badge && (
           <span className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
@@ -272,6 +335,14 @@ export default function Layout() {
                         Your Profile
                       </Link>
                     )}
+                    <Link
+                      to="/admin"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                    >
+                      <Shield className="h-4 w-4 mr-3" />
+                      Admin Panel
+                    </Link>
                     <button
                       onClick={() => {
                         setIsProfileMenuOpen(false);
@@ -306,47 +377,47 @@ export default function Layout() {
           <div className="lg:hidden">
             <div className="pt-2 pb-3 space-y-1">
               {navigation.map((item) => (
-                <React.Fragment key={item.name}>
-                  {renderMobileNavItem(item)}
-                  {item.children?.map((child) => (
-                    <React.Fragment key={child.name}>
-                      {child.isEnabled ? (
-                        <Link
-                          to={child.href}
-                          className={`${
-                            location.pathname === child.href
-                              ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
-                              : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
-                          } block pl-8 pr-4 py-2 border-l-4 text-sm font-medium flex items-center`}
-                          onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                          <child.icon className="h-4 w-4 mr-2" />
-                          {child.name}
-                        </Link>
-                      ) : (
-                        <Tooltip.Provider>
-                          <Tooltip.Root>
-                            <Tooltip.Trigger asChild>
-                              <div className="block pl-8 pr-4 py-2 border-l-4 border-transparent text-sm font-medium text-gray-400 flex items-center cursor-not-allowed group">
-                                <child.icon className="h-4 w-4 mr-2" />
-                                {child.name}
-                                <Construction className="h-4 w-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                              <Tooltip.Content
-                                className="bg-gray-900 text-white px-3 py-1.5 rounded text-sm"
-                                sideOffset={5}
-                              >
-                                Coming Soon
-                                <Tooltip.Arrow className="fill-gray-900" />
-                              </Tooltip.Content>
-                            </Tooltip.Portal>
-                          </Tooltip.Root>
-                        </Tooltip.Provider>
+                <React.Fragment key={item.id}>
+                  {!item.featureFlag || featureFlags[item.featureFlag] ? (
+                    <Link
+                      to={item.href}
+                      className={`${
+                        location.pathname === item.href
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
+                          : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
+                      } block pl-3 pr-4 py-2 border-l-4 text-base font-medium flex items-center`}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <item.icon className="h-5 w-5 mr-2" />
+                      {item.name}
+                      {item.badge && (
+                        <span className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                          {item.badge}
+                        </span>
                       )}
-                    </React.Fragment>
-                  ))}
+                    </Link>
+                  ) : (
+                    <Tooltip.Provider>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger asChild>
+                          <div className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-400 flex items-center cursor-not-allowed group">
+                            <item.icon className="h-5 w-5 mr-2" />
+                            {item.name}
+                            <Construction className="h-4 w-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content
+                            className="bg-gray-900 text-white px-3 py-1.5 rounded text-sm"
+                            sideOffset={5}
+                          >
+                            Coming Soon
+                            <Tooltip.Arrow className="fill-gray-900" />
+                          </Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  )}
                 </React.Fragment>
               ))}
             </div>
@@ -361,55 +432,7 @@ export default function Layout() {
           <div className="flex flex-col w-64 border-r border-gray-200 bg-white">
             <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
               <nav className="flex-1 px-2 space-y-1">
-                {navigation.map((item) => (
-                  <React.Fragment key={item.name}>
-                    {renderNavItem(item)}
-                    {item.children?.map((child) => (
-                      <React.Fragment key={child.name}>
-                        {child.isEnabled ? (
-                          <Link
-                            to={child.href}
-                            className={`${
-                              location.pathname === child.href
-                                ? 'bg-indigo-50 text-indigo-600'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                            } group flex items-center px-8 py-2 text-sm font-medium rounded-md`}
-                          >
-                            <child.icon
-                              className={`${
-                                location.pathname === child.href
-                                  ? 'text-indigo-600'
-                                  : 'text-gray-400 group-hover:text-gray-500'
-                              } mr-3 h-4 w-4`}
-                            />
-                            {child.name}
-                          </Link>
-                        ) : (
-                          <Tooltip.Provider>
-                            <Tooltip.Root>
-                              <Tooltip.Trigger asChild>
-                                <div className="flex items-center px-8 py-2 text-sm font-medium text-gray-400 cursor-not-allowed rounded-md group">
-                                  <child.icon className="h-4 w-4 mr-3" />
-                                  {child.name}
-                                  <Construction className="h-4 w-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </Tooltip.Trigger>
-                              <Tooltip.Portal>
-                                <Tooltip.Content
-                                  className="bg-gray-900 text-white px-3 py-1.5 rounded text-sm"
-                                  sideOffset={5}
-                                >
-                                  Coming Soon
-                                  <Tooltip.Arrow className="fill-gray-900" />
-                                </Tooltip.Content>
-                              </Tooltip.Portal>
-                            </Tooltip.Root>
-                          </Tooltip.Provider>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </React.Fragment>
-                ))}
+                {navigation.map((item) => renderNavItem(item))}
               </nav>
             </div>
           </div>

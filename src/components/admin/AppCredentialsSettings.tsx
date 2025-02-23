@@ -28,21 +28,21 @@ export default function AppCredentialsSettings() {
 
   const loadCredentials = async () => {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('role', 'superadmin')
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'app_credentials')
         .single();
 
       if (error) throw error;
 
-      if (profile?.settings?.app_credentials) {
+      if (data?.value) {
         setCredentials({
           ...defaultCredentials,
-          ...profile.settings.app_credentials,
+          ...data.value,
           google: {
             ...defaultCredentials.google,
-            ...(profile.settings.app_credentials.google || {}),
+            ...(data.value.google || {}),
             redirect_uri: `${window.location.origin}/auth/google/callback`,
             javascript_origins: [window.location.origin]
           }
@@ -60,31 +60,15 @@ export default function AppCredentialsSettings() {
     setSuccess('');
 
     try {
-      // Validate credentials
-      if (!credentials.google.client_id || !credentials.google.client_secret) {
-        throw new Error('Google credentials are required');
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('settings')
-        .eq('role', 'superadmin')
-        .single();
-
-      if (profileError) throw profileError;
-
-      const settings = {
-        ...profile?.settings,
-        app_credentials: credentials
-      };
-
       const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ settings })
-        .eq('role', 'superadmin');
+        .from('app_settings')
+        .upsert({
+          key: 'app_credentials',
+          value: credentials,
+          updated_at: new Date().toISOString()
+        });
 
       if (updateError) throw updateError;
-
       setSuccess('Credentials saved successfully!');
     } catch (error: any) {
       console.error('Error saving credentials:', error);
